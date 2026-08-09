@@ -70,7 +70,7 @@ export function FAQ() {
                   {faq.q}
                 </span>
                 <motion.span
-                  className="material-symbols-outlined text-[#c7c4d8]"
+                  className="material-symbols-outlined text-on-surface-variant"
                   animate={{ rotate: isOpen ? 180 : 0 }}
                   transition={{ duration: 0.3, ease: [0.25, 1, 0.5, 1] }}
                   style={{ fontSize: 20 }}
