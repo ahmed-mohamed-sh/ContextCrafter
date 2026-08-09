@@ -38,7 +38,7 @@ export default function DashboardLayoutClient({
 
   useEffect(() => {
     const hasAnalyzing = recentRepos.some(
-      (r) => r.status === "ANALYZING" || r.status === "PENDING"
+      (r) => r.status === "ANALYZING" || r.status === "PENDING",
     );
 
     if (!hasAnalyzing) return;
@@ -93,21 +93,41 @@ export default function DashboardLayoutClient({
         <div className="flex-1 overflow-y-auto px-4 pb-6 space-y-1">
           {[
             { icon: "dashboard", label: "Dashboard", href: "/dashboard" },
-            { icon: "account_tree", label: "Repositories", href: "/dashboard/repositories" },
-            { 
-              icon: "forum", 
-              label: "AI Chat", 
+            {
+              icon: "account_tree",
+              label: "Repositories",
+              href: "/dashboard/repositories",
+            },
+            {
+              icon: "forum",
+              label: "AI Chat",
               href: "#",
               onClick: (e: React.MouseEvent) => {
                 e.preventDefault();
                 if (recentRepos.length > 0) {
-                  router.push(`/dashboard/repositories/${recentRepos[0].id}/chat`);
+                  router.push(
+                    `/dashboard/repositories/${recentRepos[0].id}/chat`,
+                  );
                 } else {
                   alert("Connect a repository first");
                 }
-              }
+              },
             },
-            { icon: "account_tree", label: "Architecture", href: "#" },
+            {
+              icon: "account_tree",
+              label: "Architecture",
+              href: "#",
+              onClick: (e: React.MouseEvent) => {
+                e.preventDefault();
+                if (recentRepos.length > 0) {
+                  router.push(
+                    `/dashboard/repositories/${recentRepos[0].id}/architecture`,
+                  );
+                } else {
+                  alert("Connect a repository first");
+                }
+              },
+            },
             { icon: "hub", label: "Knowledge Graph", href: "#" },
             { icon: "code", label: "Code Review", href: "#" },
             { icon: "description", label: "Documentation", href: "#" },
@@ -115,8 +135,10 @@ export default function DashboardLayoutClient({
             { icon: "settings", label: "Settings", href: "#" },
           ].map((item) => {
             // Very simple active state matching
-            const isActive = pathname === item.href || (item.label === "AI Chat" && pathname.includes("/chat"));
-            
+            const isActive =
+              pathname === item.href ||
+              (item.label === "AI Chat" && pathname.includes("/chat"));
+
             return (
               <Link
                 key={item.label}
@@ -133,7 +155,7 @@ export default function DashboardLayoutClient({
                 </span>
                 {item.label}
               </Link>
-            )
+            );
           })}
         </div>
 
