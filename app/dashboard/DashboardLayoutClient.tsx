@@ -128,7 +128,21 @@ export default function DashboardLayoutClient({
                 }
               },
             },
-            { icon: "hub", label: "Knowledge Graph", href: "#" },
+            {
+              icon: "hub",
+              label: "Knowledge Graph",
+              href: "#",
+              onClick: (e: React.MouseEvent) => {
+                e.preventDefault();
+                if (recentRepos.length > 0) {
+                  router.push(
+                    `/dashboard/repositories/${recentRepos[0].id}/knowledge-graph`,
+                  );
+                } else {
+                  alert("Connect a repository first");
+                }
+              },
+            },
             { icon: "code", label: "Code Review", href: "#" },
             { icon: "description", label: "Documentation", href: "#" },
             { icon: "construction", label: "Technical Debt", href: "#" },
