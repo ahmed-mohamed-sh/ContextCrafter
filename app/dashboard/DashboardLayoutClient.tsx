@@ -83,7 +83,7 @@ export default function DashboardLayoutClient({
               </p>
             </div>
           </div>
-          <button className="w-full py-2 px-4 mb-6 rounded-lg bg-primary-container text-on-primary-container font-semibold flex items-center justify-center gap-2 hover:brightness-110 transition-all text-sm">
+          <button className="w-full py-2 px-4 mb-6 rounded-lg bg-primary-container text-on-primary-container font-semibold flex items-center justify-center gap-2 hover:brightness-110 transition-all text-sm cursor-pointer">
             <span className="material-symbols-outlined text-[18px]">add</span>
             New Workspace
           </button>
@@ -143,7 +143,21 @@ export default function DashboardLayoutClient({
                 }
               },
             },
-            { icon: "code", label: "Code Review", href: "#" },
+            {
+              icon: "code",
+              label: "Code Review",
+              href: "#",
+              onClick: (e: React.MouseEvent) => {
+                e.preventDefault();
+                if (recentRepos.length > 0) {
+                  router.push(
+                    `/dashboard/repositories/${recentRepos[0].id}/code-review`,
+                  );
+                } else {
+                  alert("Connect a repository first");
+                }
+              },
+            },
             { icon: "description", label: "Documentation", href: "#" },
             { icon: "construction", label: "Technical Debt", href: "#" },
             { icon: "settings", label: "Settings", href: "#" },
@@ -216,7 +230,7 @@ export default function DashboardLayoutClient({
         <div className="flex items-center gap-4">
           <button
             onClick={() => setModalOpen(true)}
-            className="hidden md:flex px-4 py-1.5 rounded-lg border border-primary/30 text-primary text-sm hover:bg-primary/10 transition-colors"
+            className="hidden md:flex px-4 py-1.5 rounded-lg border border-primary/30 text-primary text-sm hover:bg-primary/10 transition-colors cursor-pointer"
           >
             Connect Repo
           </button>
