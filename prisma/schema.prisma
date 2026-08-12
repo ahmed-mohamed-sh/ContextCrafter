@@ -108,6 +108,9 @@ model Repository {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  aiReview    Json?
+  reviewedAt  DateTime?
 }
 
 enum RepoStatus {
