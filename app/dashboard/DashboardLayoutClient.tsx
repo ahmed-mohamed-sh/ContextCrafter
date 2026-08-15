@@ -158,7 +158,21 @@ export default function DashboardLayoutClient({
                 }
               },
             },
-            { icon: "description", label: "Documentation", href: "#" },
+            {
+              icon: "description",
+              label: "Documentation",
+              href: "#",
+              onClick: (e: React.MouseEvent) => {
+                e.preventDefault();
+                if (recentRepos.length > 0) {
+                  router.push(
+                    `/dashboard/repositories/${recentRepos[0].id}/Documention`,
+                  );
+                } else {
+                  alert("Connect a repository first");
+                }
+              },
+            },
             { icon: "construction", label: "Technical Debt", href: "#" },
             { icon: "settings", label: "Settings", href: "#" },
           ].map((item) => {
