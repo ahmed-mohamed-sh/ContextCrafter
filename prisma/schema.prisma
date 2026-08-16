@@ -1,15 +1,7 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client-js"
   output   = "../node_modules/.prisma/client"
 }
-
-
-
 
 datasource db {
   provider  = "postgresql"
@@ -17,25 +9,20 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-
-// ─── Auth ───────────────────────────────────────────
-
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String?   @unique
-  emailVerified DateTime?
-  image         String?
+  id             String        @id @default(cuid())
+  name           String?
+  email          String?       @unique
+  emailVerified  DateTime?
+  image          String?
   githubUsername String?
-  githubToken   String?   // encrypted
-
-  accounts      Account[]
-  sessions      Session[]
-  repositories  Repository[]
-  chatSessions  ChatSession[]
-
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  githubToken    String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  accounts       Account[]
+  chatSessions   ChatSession[]
+  repositories   Repository[]
+  sessions       Session[]
 }
 
 model Account {
@@ -51,8 +38,7 @@ model Account {
   scope             String?
   id_token          String?
   session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
 }
@@ -62,8 +48,7 @@ model Session {
   sessionToken String   @unique
   userId       String
   expires      DateTime
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model VerificationToken {
@@ -74,43 +59,98 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
-// ─── Repositories ───────────────────────────────────
-
 model Repository {
-  id          String   @id @default(cuid())
-  userId      String
-  githubId    Int      @unique
-  name        String
-  fullName    String   // e.g. "ahmed/my-repo"
-  description String?
-  url         String
-  private     Boolean  @default(false)
-  language    String?
-  stars       Int      @default(0)
+  id              String        @id @default(cuid())
+  userId          String
+  githubId        Int           @unique
+  name            String
+  fullName        String
+  description     String?
+  url             String
+  private         Boolean       @default(false)
+  language        String?
+  stars           Int           @default(0)
+  status          RepoStatus    @default(PENDING)
+  analyzedAt      DateTime?
+  totalFiles      Int           @default(0)
+  totalComponents Int           @default(0)
+  totalAPIs       Int           @default(0)
+  totalModels     Int           @default(0)
+  healthScore     Int           @default(0)
+  aiScore         Int           @default(0)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  aiReview        Json?
+  reviewedAt      DateTime?
+  chatSessions    ChatSession[]
+  decisions       Decision[]
+  embeddings      Embedding[]
+  files           RepoFile[]
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
 
-  // Analysis state
-  status      RepoStatus @default(PENDING)
-  analyzedAt  DateTime?
-
-  // Stats (updated after analysis)
-  totalFiles      Int @default(0)
-  totalComponents Int @default(0)
-  totalAPIs       Int @default(0)
-  totalModels     Int @default(0)
-  healthScore     Int @default(0)
-  aiScore         Int @default(0)
-
-  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  files        RepoFile[]
-  chatSessions ChatSession[]
+model RepoFile {
+  id           String      @id @default(cuid())
+  repositoryId String
+  path         String
+  name         String
+  extension    String?
+  size         Int?
+  content      String?
+  language     String?
+  complexity   Int?
+  linesOfCode  Int?
+  isDeadCode   Boolean     @default(false)
   embeddings   Embedding[]
-  decisions    Decision[]
+  repository   Repository  @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  @@unique([repositoryId, path])
+}
 
-  aiReview    Json?
-  reviewedAt  DateTime?
+model Embedding {
+  id           String                 @id @default(cuid())
+  repositoryId String
+  fileId       String?
+  content      String
+  /// @db.vector(1536)
+  vector       Unsupported("vector")?
+  metadata     Json?
+  createdAt    DateTime               @default(now())
+  file         RepoFile?              @relation(fields: [fileId], references: [id])
+  repository   Repository             @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+}
+
+model ChatSession {
+  id           String     @id @default(cuid())
+  userId       String
+  repositoryId String
+  title        String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages     Message[]
+}
+
+model Message {
+  id            String      @id @default(cuid())
+  chatSessionId String
+  role          MessageRole
+  content       String
+  sources       Json?
+  createdAt     DateTime    @default(now())
+  chatSession   ChatSession @relation(fields: [chatSessionId], references: [id], onDelete: Cascade)
+}
+
+model Decision {
+  id           String     @id @default(cuid())
+  repositoryId String
+  title        String
+  context      String
+  tags         String[]
+  source       String?
+  createdAt    DateTime   @default(now())
+  repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
 }
 
 enum RepoStatus {
@@ -120,90 +160,7 @@ enum RepoStatus {
   FAILED
 }
 
-// ─── Files ──────────────────────────────────────────
-
-model RepoFile {
-  id           String  @id @default(cuid())
-  repositoryId String
-  path         String
-  name         String
-  extension    String?
-  size         Int?
-  content      String? // raw content (capped)
-  language     String?
-
-  // Analysis
-  complexity   Int?
-  linesOfCode  Int?
-  isDeadCode   Boolean @default(false)
-
-  repository Repository  @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
-  embeddings Embedding[]
-
-  @@unique([repositoryId, path])
-}
-
-// ─── Embeddings (pgvector) ──────────────────────────
-
-model Embedding {
-  id           String   @id @default(cuid())
-  repositoryId String
-  fileId       String?
-  content      String   // chunk text
-  /// @db.vector(1536)
-  vector       Unsupported("vector(1536)")?
-  metadata     Json?    // { path, lines, type }
-
-  repository Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
-  file       RepoFile?  @relation(fields: [fileId], references: [id], onDelete: SetNull)
-
-  createdAt DateTime @default(now())
-}
-
-// ─── Chat ───────────────────────────────────────────
-
-model ChatSession {
-  id           String    @id @default(cuid())
-  userId       String
-  repositoryId String
-  title        String?
-
-  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  repository Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
-  messages   Message[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model Message {
-  id            String      @id @default(cuid())
-  chatSessionId String
-  role          MessageRole
-  content       String
-  sources       Json?       // relevant files used as context
-
-  chatSession ChatSession @relation(fields: [chatSessionId], references: [id], onDelete: Cascade)
-
-  createdAt DateTime @default(now())
-}
-
 enum MessageRole {
   USER
   ASSISTANT
-}
-
-// ─── Decision Memory ────────────────────────────────
-
-model Decision {
-  id           String @id @default(cuid())
-  repositoryId String
-  title        String   // "Why Prisma over Drizzle?"
-  context      String   // the answer / reasoning
-  tags         String[] // ["database", "orm"]
-  source       String?  // "README", "ADR", "commit"
-
-  repository Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
-
-  createdAt DateTime @default(now())
 }
