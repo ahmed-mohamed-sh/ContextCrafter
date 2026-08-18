@@ -23,6 +23,7 @@ model User {
   chatSessions   ChatSession[]
   repositories   Repository[]
   sessions       Session[]
+  settings      UserSettings?
 }
 
 model Account {
@@ -140,6 +141,16 @@ model Message {
   sources       Json?
   createdAt     DateTime    @default(now())
   chatSession   ChatSession @relation(fields: [chatSessionId], references: [id], onDelete: Cascade)
+}
+
+model UserSettings {
+  id           String  @id @default(cuid())
+  userId       String  @unique
+  llmProvider  String  @default("groq")
+  llmApiKey    String?
+  embedModel   String  @default("nomic")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Decision {

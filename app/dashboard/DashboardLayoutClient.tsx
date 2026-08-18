@@ -188,7 +188,21 @@ export default function DashboardLayoutClient({
                 }
               },
             },
-            { icon: "settings", label: "Settings", href: "#" },
+            {
+              icon: "settings",
+              label: "Settings",
+              href: "#",
+              onClick: (e: React.MouseEvent) => {
+                e.preventDefault();
+                if (recentRepos.length > 0) {
+                  router.push(
+                    `/dashboard/repositories/${recentRepos[0].id}/setting`,
+                  );
+                } else {
+                  alert("Connect a repository first");
+                }
+              },
+            },
           ].map((item) => {
             // Very simple active state matching
             const isActive =
