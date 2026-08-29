@@ -16,34 +16,27 @@ export default async function KnowledgeGraphPage({
     where: { id: repoId, userId: session.user.id },
     include: {
       files: {
-        select: { path: true, language: true, extension: true },
+        select: {
+          id: true,
+          path: true,
+          language: true,
+          extension: true,
+          fromConnections: {
+            select: { toFileId: true },
+          },
+        },
       },
     },
   });
 
   if (!repo) redirect("/dashboard");
 
-  function buildGraph(
-    files: {
-      path: string;
-      language: string | null;
-      extension: string | null;
-    }[],
-  ) {
+  function buildGraph(files: any[]) {
     const nodes: GraphNode[] = [];
     const edges: GraphEdge[] = [];
 
     const cx = 400;
     const cy = 300;
-
-    // خد كل الـ files مش slice
-    const allFiles = files.filter(
-      (f) =>
-        !f.path.includes("node_modules") &&
-        !f.path.includes(".next") &&
-        !f.path.includes("dist/") &&
-        !f.path.includes(".git"),
-    );
 
     const getType = (path: string): GraphNode["type"] => {
       if (
@@ -75,106 +68,84 @@ export default async function KnowledgeGraphPage({
       return "utility";
     };
 
-    // بنا الـ nodes في دوائر متعددة زي الـ neural network
-    const totalFiles = allFiles.length;
-
-    allFiles.forEach((file, i) => {
+    files.slice(0, 60).forEach((file, i) => {
       const type = getType(file.path);
-
-      // توزيع في دوائر متعددة
-      const layer = Math.floor(i / 12); // كل 12 node في layer
-      const indexInLayer = i % 12;
-      const totalInLayer = Math.min(12, totalFiles - layer * 12);
-
-      const radius = 80 + layer * 80; // كل layer أبعد
+      const layer = Math.floor(i / 10);
+      const indexInLayer = i % 10;
+      const totalInLayer = Math.min(10, files.length - layer * 10);
+      const radius = 80 + layer * 70;
       const angle = (indexInLayer / totalInLayer) * 2 * Math.PI;
-
-      // إضافة شوية randomness عشان يبان زي neural network
-      const jitter = 20;
-      const x = cx + radius * Math.cos(angle) + (Math.random() - 0.5) * jitter;
-      const y = cy + radius * Math.sin(angle) + (Math.random() - 0.5) * jitter;
-
-      const label =
-        file.path
-          .split("/")
-          .pop()
-          ?.replace(/\.[^.]+$/, "") ?? file.path;
+      const jitter = 15;
 
       nodes.push({
-        id: file.path,
-        label,
+        id: file.id,
+        label:
+          file.path
+            .split("/")
+            .pop()
+            ?.replace(/\.[^.]+$/, "") ?? "",
         type,
         path: file.path,
-        x: Math.max(30, Math.min(770, x)),
-        y: Math.max(30, Math.min(570, y)),
+        x: Math.max(
+          30,
+          Math.min(
+            770,
+            cx + radius * Math.cos(angle) + (Math.random() - 0.5) * jitter,
+          ),
+        ),
+        y: Math.max(
+          30,
+          Math.min(
+            570,
+            cy + radius * Math.sin(angle) + (Math.random() - 0.5) * jitter,
+          ),
+        ),
         r: type === "service" ? 10 : type === "component" ? 9 : 7,
       });
     });
 
-    // Root node في المنتصف
-    nodes.unshift({
-      id: "root",
-      label: "Root",
-      type: "service",
-      path: "/",
-      x: cx,
-      y: cy,
-      r: 16,
-    });
+    const nodeIds = new Set(nodes.map((n) => n.id));
 
-    // Edges — connections بين كل الـ files
-    const nodesByType: Record<string, GraphNode[]> = {};
-    nodes.forEach((n) => {
-      if (!nodesByType[n.type]) nodesByType[n.type] = [];
-      nodesByType[n.type].push(n);
-    });
-
-    // كل node بتتصل بـ nearest neighbors
-    nodes.forEach((node, i) => {
-      if (node.id === "root") return;
-
-      // connect للـ root
-      if (i < 8) edges.push({ from: "root", to: node.id });
-
-      // connect لـ 2-3 nodes قريبين منه
-      const others = nodes.filter((n) => n.id !== node.id && n.id !== "root");
-      const nearest = others
-        .map((n) => ({
-          node: n,
-          dist: Math.sqrt(
-            Math.pow(n.x - node.x, 2) + Math.pow(n.y - node.y, 2),
-          ),
-        }))
-        .sort((a, b) => a.dist - b.dist)
-        .slice(0, 2);
-
-      nearest.forEach(({ node: other }) => {
-        const exists = edges.some(
-          (e) =>
-            (e.from === node.id && e.to === other.id) ||
-            (e.from === other.id && e.to === node.id),
-        );
-        if (!exists) edges.push({ from: node.id, to: other.id });
+    files.forEach((file) => {
+      file.fromConnections?.forEach((conn: { toFileId: string }) => {
+        if (nodeIds.has(file.id) && nodeIds.has(conn.toFileId)) {
+          const exists = edges.some(
+            (e) =>
+              (e.from === file.id && e.to === conn.toFileId) ||
+              (e.from === conn.toFileId && e.to === file.id),
+          );
+          if (!exists) {
+            edges.push({ from: file.id, to: conn.toFileId });
+          }
+        }
       });
-
-      // connect nodes من نفس الـ type ببعض
-      const sameType =
-        nodesByType[node.type]?.filter((n) => n.id !== node.id) ?? [];
-      if (sameType.length > 0) {
-        const randomSame =
-          sameType[Math.floor(Math.random() * sameType.length)];
-        const exists = edges.some(
-          (e) =>
-            (e.from === node.id && e.to === randomSame.id) ||
-            (e.from === randomSame.id && e.to === node.id),
-        );
-        if (!exists) edges.push({ from: node.id, to: randomSame.id });
-      }
     });
+
+    if (edges.length === 0) {
+      nodes.forEach((node, i) => {
+        const nearest = nodes
+          .filter((n) => n.id !== node.id)
+          .map((n) => ({
+            node: n,
+            dist: Math.sqrt(
+              Math.pow(n.x - node.x, 2) + Math.pow(n.y - node.y, 2),
+            ),
+          }))
+          .sort((a, b) => a.dist - b.dist)
+          .slice(0, 2);
+        nearest.forEach(({ node: other }) => {
+          const exists = edges.some(
+            (e) =>
+              (e.from === node.id && e.to === other.id) ||
+              (e.from === other.id && e.to === node.id),
+          );
+          if (!exists) edges.push({ from: node.id, to: other.id });
+        });
+      });
+    }
 
     return { nodes, edges };
   }
-
   return (
     <KnowledgeGraphClient
       repo={{ id: repo.id, name: repo.name }}

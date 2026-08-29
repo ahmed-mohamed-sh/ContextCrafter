@@ -204,10 +204,14 @@ export default function DashboardLayoutClient({
               },
             },
           ].map((item) => {
-            // Very simple active state matching
             const isActive =
               pathname === item.href ||
-              (item.label === "AI Chat" && pathname.includes("/chat"));
+              (item.label === "AI Chat" && pathname.includes("/chat")) ||
+              (item.label === "Code Review" && pathname.includes("/code-review")) ||
+              (item.label === "Documentation" && pathname.includes("/Documention")) ||
+              (item.label === "Technical Debt" && pathname.includes("/technical-dept")) ||
+              (item.label === "Knowledge Graph" && pathname.includes("/knowledge-graph")) ||
+              (item.label === "Settings" && pathname.includes("/setting"));
 
             return (
               <Link

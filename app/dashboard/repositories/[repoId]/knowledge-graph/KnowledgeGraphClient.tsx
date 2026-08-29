@@ -46,8 +46,31 @@ const typeLabels = {
 };
 
 export default function KnowledgeGraphClient({ repo, graph }: Props) {
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analyzed, setAnalyzed] = useState(false);
+
+  async function analyzeImports() {
+    setAnalyzing(true);
+    try {
+      const res = await fetch(`/api/repos/${repo.id}/analyze-imports`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (data.connections >= 0) {
+        setAnalyzed(true);
+        window.location.reload();
+      }
+    } finally {
+      setAnalyzing(false);
+    }
+  }
+
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [zoom, setZoom] = useState(1);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [fileContent, setFileContent] = useState<string | null>(null);
+  const [loadingFile, setLoadingFile] = useState(false);
+  const [showCode, setShowCode] = useState(false);
   const safeGraph = graph ?? { nodes: [], edges: [] };
   const connectedNodes = selectedNode
     ? (safeGraph.edges
@@ -56,6 +79,35 @@ export default function KnowledgeGraphClient({ repo, graph }: Props) {
         .map((id) => safeGraph.nodes.find((n) => n.id === id))
         .filter(Boolean) as GraphNode[])
     : [];
+
+  const searchMatches = searchQuery.trim()
+    ? safeGraph.nodes.filter(
+        (n) =>
+          n.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          n.path.toLowerCase().includes(searchQuery.toLowerCase()),
+      )
+    : [];
+
+  async function viewFile(node: GraphNode) {
+    setLoadingFile(true);
+    setShowCode(true);
+    setFileContent(null);
+    try {
+      const res = await fetch(
+        `/api/repos/${repo.id}/file-content?path=${encodeURIComponent(node.path)}`,
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setFileContent(data.content ?? "// File content not available");
+      } else {
+        setFileContent("// Failed to load file content");
+      }
+    } catch {
+      setFileContent("// Error loading file");
+    } finally {
+      setLoadingFile(false);
+    }
+  }
 
   return (
     <div className="flex-1 relative flex flex-col h-full overflow-hidden">
@@ -109,8 +161,12 @@ export default function KnowledgeGraphClient({ repo, graph }: Props) {
               const isSelected = selectedNode?.id === node.id;
               const isConnected = connectedNodes.some((n) => n.id === node.id);
               const isRoot = node.id === "root";
+              const isSearchMatch =
+                searchQuery.trim() !== "" &&
+                searchMatches.some((m) => m.id === node.id);
               const isDimmed =
-                selectedNode && !isSelected && !isConnected && !isRoot;
+                (selectedNode && !isSelected && !isConnected && !isRoot) ||
+                (searchQuery.trim() !== "" && !isSearchMatch && !isSelected);
 
               return (
                 <g
@@ -122,13 +178,27 @@ export default function KnowledgeGraphClient({ repo, graph }: Props) {
                     transition: "opacity 0.3s",
                   }}
                 >
+                  {/* Search highlight ring */}
+                  {isSearchMatch && !isSelected && (
+                    <circle
+                      cx={node.x}
+                      cy={node.y}
+                      r={node.r + 10}
+                      fill="none"
+                      stroke="#fbbf24"
+                      strokeWidth={2}
+                      opacity={0.8}
+                      strokeDasharray="4 2"
+                    />
+                  )}
+
                   {/* Outer glow */}
-                  {(isSelected || isRoot) && (
+                  {(isSelected || isRoot || isSearchMatch) && (
                     <circle
                       cx={node.x}
                       cy={node.y}
                       r={node.r + 12}
-                      fill={color}
+                      fill={isSearchMatch && !isSelected ? "#fbbf24" : color}
                       opacity={0.08}
                     />
                   )}
@@ -214,6 +284,57 @@ export default function KnowledgeGraphClient({ repo, graph }: Props) {
             </span>
           </button>
         </div>
+        {/* Search Bar */}
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 w-80">
+          <div className="glass-panel rounded-lg flex items-center gap-2 px-3 py-2 border border-white/10">
+            <span className="material-symbols-outlined text-[18px] text-on-surface-variant">search</span>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                // Auto-select if exactly one match
+                const q = e.target.value.trim().toLowerCase();
+                if (q) {
+                  const matches = safeGraph.nodes.filter(
+                    (n) => n.label.toLowerCase().includes(q) || n.path.toLowerCase().includes(q),
+                  );
+                  if (matches.length === 1) setSelectedNode(matches[0]);
+                }
+              }}
+              placeholder="Search files in graph..."
+              className="bg-transparent border-none outline-none flex-1 text-sm text-on-surface placeholder:text-on-surface-variant/50"
+              style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 12 }}
+            />
+            {searchQuery && (
+              <>
+                <span className="text-[11px] text-on-surface-variant" style={{ fontFamily: "JetBrains Mono, monospace" }}>
+                  {searchMatches.length} match{searchMatches.length !== 1 ? "es" : ""}
+                </span>
+                <button
+                  onClick={() => { setSearchQuery(""); }}
+                  className="text-on-surface-variant hover:text-white transition-colors cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[16px]">close</span>
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        <button
+          onClick={analyzeImports}
+          disabled={analyzing}
+          className="absolute top-4 right-4 z-20 flex items-center gap-2 px-4 py-2 rounded-lg transition-all hover:brightness-110 disabled:opacity-50"
+          style={{ background: "#4f46e5", color: "#dad7ff", fontFamily: "Inter, sans-serif", fontSize: 13, fontWeight: 600 }}
+        >
+          {analyzing ? (
+            <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+          ) : (
+            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>account_tree</span>
+          )}
+          {analyzing ? "Analyzing..." : analyzed ? "Re-analyze Imports" : "Analyze Real Imports"}
+        </button>
 
         {/* Legend */}
         <div className="glass-panel absolute bottom-8 left-8 rounded-lg p-4 z-20 flex flex-col gap-3 min-w-40">
@@ -350,14 +471,58 @@ export default function KnowledgeGraphClient({ repo, graph }: Props) {
               </div>
 
               {/* Footer */}
-              <div className="p-4 border-t border-white/10 bg-surface-container-low/50">
-                <button className="w-full py-2 bg-transparent border border-outline-variant hover:border-primary text-on-surface text-body-sm rounded transition-colors flex justify-center items-center gap-2">
+              <div className="p-4 border-t border-white/10 bg-surface-container-low/50 flex flex-col gap-2">
+                <button
+                  onClick={() => viewFile(selectedNode)}
+                  className="cursor-pointer w-full py-2 bg-transparent border border-outline-variant hover:border-primary text-on-surface text-body-sm rounded transition-colors flex justify-center items-center gap-2"
+                >
                   <span className="material-symbols-outlined text-[18px]">
-                    open_in_new
+                    {showCode ? "visibility_off" : "code"}
                   </span>
-                  View File
+                  {showCode ? "Hide Code" : "View File"}
                 </button>
               </div>
+
+              {/* Source Code Panel */}
+              {showCode && (
+                <div className="border-t border-white/10 flex flex-col max-h-[40vh]">
+                  <div className="flex items-center justify-between px-4 py-2 bg-surface-container-low/80 border-b border-white/5">
+                    <span
+                      className="text-[10px] text-on-surface-variant uppercase font-semibold tracking-wider"
+                    >
+                      Source Code
+                    </span>
+                    <button
+                      onClick={() => setShowCode(false)}
+                      className="cursor-pointer text-on-surface-variant hover:text-white transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">close</span>
+                    </button>
+                  </div>
+                  <div className="flex-1 overflow-auto p-4 bg-[#0d1117]">
+                    {loadingFile ? (
+                      <div className="flex items-center gap-2 text-on-surface-variant text-sm">
+                        <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                        Loading...
+                      </div>
+                    ) : (
+                      <pre
+                        style={{
+                          fontFamily: "JetBrains Mono, monospace",
+                          fontSize: 11,
+                          lineHeight: 1.6,
+                          color: "#c9d1d9",
+                          margin: 0,
+                          whiteSpace: "pre-wrap",
+                          wordBreak: "break-all",
+                        }}
+                      >
+                        {fileContent}
+                      </pre>
+                    )}
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>

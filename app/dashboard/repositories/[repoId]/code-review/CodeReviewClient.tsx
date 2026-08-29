@@ -73,6 +73,397 @@ export default function CodeReviewClient({
     setTimeout(() => setCopiedIndex(null), 2000);
   };
 
+  function exportReport() {
+    const now = new Date();
+    const dateStr = now.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+    const timeStr = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+    const reportId = `CCR-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+
+    const overallScore = Math.round(
+      (currentReview.security.score + currentReview.performance.score + currentReview.architecture.score) / 3,
+    );
+    const riskLevel = overallScore >= 80 ? "LOW" : overallScore >= 60 ? "MEDIUM" : overallScore >= 40 ? "HIGH" : "CRITICAL";
+    const riskColor = overallScore >= 80 ? "#16a34a" : overallScore >= 60 ? "#d97706" : overallScore >= 40 ? "#dc2626" : "#7f1d1d";
+
+    const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+    const secSeverity = currentReview.security.severity ?? "low";
+    const secSevLabel = secSeverity.charAt(0).toUpperCase() + secSeverity.slice(1);
+
+    const sevBadge = (sev: string) => {
+      const colors: Record<string, string> = { critical: "#7f1d1d", high: "#dc2626", medium: "#d97706", low: "#16a34a" };
+      const bgs: Record<string, string> = { critical: "#fef2f2", high: "#fef2f2", medium: "#fffbeb", low: "#f0fdf4" };
+      return `<span style="display:inline-block;padding:2px 12px;border-radius:4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:${colors[sev] ?? "#64748b"};background:${bgs[sev] ?? "#f8fafc"};border:1px solid ${colors[sev] ?? "#e2e8f0"}30;">${sev}</span>`;
+    };
+
+    const findingTypeToSeverity = (type: string) => {
+      if (type === "security") return "high";
+      if (type === "performance") return "medium";
+      return "low";
+    };
+
+    const findingTypeToImpact = (type: string) => {
+      const impacts: Record<string, string> = {
+        security: "Potential exposure to attacks such as XSS, CSRF, SQL injection, or authentication bypass. Exploitation could lead to unauthorized data access, session hijacking, or full system compromise.",
+        performance: "Degraded application responsiveness, increased server load, and poor user experience. Under heavy traffic, affected endpoints may become unresponsive or trigger cascading failures.",
+        architecture: "Increased technical debt, reduced code modularity, and difficulty scaling. Deviation from established patterns makes onboarding harder and increases risk of regression bugs.",
+        maintainability: "Higher cost of future changes, increased bug density, and reduced developer productivity. Code becomes fragile and resistant to refactoring.",
+      };
+      return impacts[type] ?? "May affect application reliability and developer productivity.";
+    };
+
+    const findingTypeToRemediation = (type: string) => {
+      const rems: Record<string, string> = {
+        security: "Apply input validation and output encoding on all user-controlled data. Implement Content Security Policy (CSP) headers. Use parameterized queries for database operations. Review authentication and session management flows against OWASP Top 10 guidelines.",
+        performance: "Profile the identified code paths using browser DevTools or server-side APM tools. Implement caching strategies (memoization, HTTP cache headers). Consider lazy loading, code splitting, and database query optimization.",
+        architecture: "Refactor the affected modules to follow the established project patterns. Extract shared logic into reusable services or utilities. Ensure proper separation of concerns between layers (presentation, business logic, data access).",
+        maintainability: "Reduce cyclomatic complexity by extracting functions. Add comprehensive JSDoc/TSDoc comments. Increase unit test coverage for critical paths. Remove dead code and consolidate duplicated logic.",
+      };
+      return rems[type] ?? "Review the identified code and apply best practices for the relevant domain.";
+    };
+
+    // Build findings
+    const findingsHtml = currentReview.suggestions.map((s, i) => {
+      const sev = findingTypeToSeverity(s.type);
+      return `
+      <div style="page-break-inside:avoid;margin-bottom:32px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+        <div style="background:#f8fafc;padding:16px 20px;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <span style="font-size:12px;color:#94a3b8;font-weight:600;">FINDING #${i + 1}</span>
+            <h4 style="font-size:16px;font-weight:700;color:#0f172a;margin:4px 0 0 0;">${esc(s.title)}</h4>
+          </div>
+          ${sevBadge(sev)}
+        </div>
+        <div style="padding:20px;">
+          <table style="width:100%;border-collapse:collapse;margin-bottom:16px;font-size:12px;">
+            <tr>
+              <td style="padding:6px 12px;background:#f8fafc;border:1px solid #e2e8f0;font-weight:600;color:#475569;width:140px;">Category</td>
+              <td style="padding:6px 12px;border:1px solid #e2e8f0;color:#334155;text-transform:capitalize;">${s.type}</td>
+              <td style="padding:6px 12px;background:#f8fafc;border:1px solid #e2e8f0;font-weight:600;color:#475569;width:140px;">Severity</td>
+              <td style="padding:6px 12px;border:1px solid #e2e8f0;color:#334155;text-transform:capitalize;">${sev}</td>
+            </tr>
+            <tr>
+              <td style="padding:6px 12px;background:#f8fafc;border:1px solid #e2e8f0;font-weight:600;color:#475569;">Affected File</td>
+              <td colspan="3" style="padding:6px 12px;border:1px solid #e2e8f0;font-family:monospace;font-size:11px;color:#334155;">${esc(s.file)}</td>
+            </tr>
+          </table>
+
+          <h5 style="font-size:13px;font-weight:700;color:#0f172a;margin:0 0 6px 0;text-transform:uppercase;letter-spacing:0.05em;">Description</h5>
+          <p style="font-size:13px;color:#475569;line-height:1.7;margin:0 0 16px 0;">${esc(s.description)}</p>
+
+          <h5 style="font-size:13px;font-weight:700;color:#0f172a;margin:0 0 6px 0;text-transform:uppercase;letter-spacing:0.05em;">Impact Assessment</h5>
+          <p style="font-size:13px;color:#475569;line-height:1.7;margin:0 0 16px 0;">${findingTypeToImpact(s.type)}</p>
+
+          ${(s.before || s.after) ? `
+          <h5 style="font-size:13px;font-weight:700;color:#0f172a;margin:0 0 10px 0;text-transform:uppercase;letter-spacing:0.05em;">Evidence &amp; Proof of Concept</h5>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+            ${s.before ? `<div>
+              <div style="font-size:10px;font-weight:700;color:#dc2626;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;display:flex;align-items:center;gap:4px;">
+                <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#dc2626;"></span> VULNERABLE CODE
+              </div>
+              <pre style="background:#1e1e2e;color:#cdd6f4;padding:14px;border-radius:6px;font-size:11px;line-height:1.6;overflow-x:auto;margin:0;border-left:3px solid #dc2626;">${esc(s.before)}</pre>
+            </div>` : ""}
+            ${s.after ? `<div>
+              <div style="font-size:10px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;display:flex;align-items:center;gap:4px;">
+                <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#16a34a;"></span> REMEDIATED CODE
+              </div>
+              <pre style="background:#1e1e2e;color:#cdd6f4;padding:14px;border-radius:6px;font-size:11px;line-height:1.6;overflow-x:auto;margin:0;border-left:3px solid #16a34a;">${esc(s.after)}</pre>
+            </div>` : ""}
+          </div>` : ""}
+
+          <h5 style="font-size:13px;font-weight:700;color:#0f172a;margin:0 0 6px 0;text-transform:uppercase;letter-spacing:0.05em;">Recommended Remediation</h5>
+          <p style="font-size:13px;color:#475569;line-height:1.7;margin:0;">${findingTypeToRemediation(s.type)}</p>
+        </div>
+      </div>`;
+    }).join("");
+
+    // Summary table
+    const summaryTableRows = currentReview.suggestions.map((s, i) => {
+      const sev = findingTypeToSeverity(s.type);
+      const sevColor: Record<string, string> = { high: "#dc2626", medium: "#d97706", low: "#16a34a" };
+      return `<tr>
+        <td style="padding:8px 12px;border:1px solid #e2e8f0;font-size:12px;color:#475569;text-align:center;">${i + 1}</td>
+        <td style="padding:8px 12px;border:1px solid #e2e8f0;font-size:12px;color:#0f172a;font-weight:500;">${esc(s.title)}</td>
+        <td style="padding:8px 12px;border:1px solid #e2e8f0;font-size:12px;text-transform:capitalize;color:#475569;">${s.type}</td>
+        <td style="padding:8px 12px;border:1px solid #e2e8f0;font-size:12px;text-transform:uppercase;font-weight:700;color:${sevColor[sev] ?? "#64748b"};text-align:center;">${sev}</td>
+        <td style="padding:8px 12px;border:1px solid #e2e8f0;font-size:11px;font-family:monospace;color:#64748b;">${esc(s.file.split("/").pop() ?? s.file)}</td>
+      </tr>`;
+    }).join("");
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Code Review Report - ${esc(repo.fullName)}</title>
+  <style>
+    @page { size: A4; margin: 20mm 18mm 25mm 18mm; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif; color: #1e293b; background: #fff; font-size: 13px; line-height: 1.6; }
+    .page-break { page-break-after: always; }
+
+    /* Cover Page */
+    .cover { display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 90vh; text-align: center; }
+    .cover-logo { font-size: 14px; font-weight: 800; letter-spacing: 0.15em; text-transform: uppercase; color: #4f46e5; margin-bottom: 48px; }
+    .cover h1 { font-size: 36px; font-weight: 800; color: #0f172a; margin-bottom: 8px; }
+    .cover .cover-sub { font-size: 18px; color: #64748b; font-weight: 400; margin-bottom: 40px; }
+    .cover .cover-meta { font-size: 13px; color: #94a3b8; line-height: 2; }
+    .cover .cover-meta strong { color: #475569; }
+    .cover .risk-badge { display: inline-block; margin-top: 32px; padding: 8px 32px; border-radius: 6px; font-size: 14px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
+    .confidential { font-size: 11px; color: #dc2626; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; margin-top: 48px; padding: 8px 24px; border: 2px solid #dc2626; border-radius: 4px; }
+
+    /* Content */
+    .content { padding: 0; }
+    h2 { font-size: 22px; font-weight: 700; color: #0f172a; margin: 0 0 20px 0; padding-bottom: 10px; border-bottom: 2px solid #4f46e5; }
+    h3 { font-size: 16px; font-weight: 700; color: #0f172a; margin: 24px 0 10px 0; }
+    p { margin: 0 0 12px 0; color: #475569; line-height: 1.7; }
+    .section { margin-bottom: 40px; }
+
+    /* TOC */
+    .toc a { text-decoration: none; color: #334155; font-size: 14px; display: block; padding: 8px 0; border-bottom: 1px dotted #e2e8f0; }
+    .toc a:hover { color: #4f46e5; }
+    .toc .toc-num { display: inline-block; width: 28px; color: #4f46e5; font-weight: 700; }
+
+    /* Metrics */
+    .metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 20px 0; }
+    .metric-box { border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; text-align: center; }
+    .metric-box .m-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #94a3b8; margin-bottom: 6px; }
+    .metric-box .m-value { font-size: 28px; font-weight: 800; }
+    .metric-box .m-sub { font-size: 11px; color: #94a3b8; margin-top: 4px; }
+
+    /* Risk Matrix */
+    .risk-matrix { width: 100%; border-collapse: collapse; margin: 16px 0; }
+    .risk-matrix th, .risk-matrix td { padding: 10px 14px; border: 1px solid #e2e8f0; font-size: 12px; text-align: left; }
+    .risk-matrix th { background: #f8fafc; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.05em; font-size: 10px; }
+
+    .footer-bar { margin-top: 40px; padding-top: 16px; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; font-size: 10px; color: #94a3b8; }
+
+    @media print {
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .page-break { page-break-after: always; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- COVER PAGE -->
+  <div class="cover page-break">
+    <div class="cover-logo">&#9670; ContextCrafter</div>
+    <h1>Code Security &amp; Quality<br>Assessment Report</h1>
+    <p class="cover-sub">${esc(repo.fullName)}</p>
+    <div class="cover-meta">
+      <strong>Report ID:</strong> ${reportId}<br>
+      <strong>Date:</strong> ${dateStr}<br>
+      <strong>Files Analyzed:</strong> ${currentAnalyzedFiles.length}<br>
+      <strong>Total Findings:</strong> ${currentReview.suggestions.length}
+    </div>
+    <div class="risk-badge" style="color:${riskColor};background:${riskColor}10;border:2px solid ${riskColor};">
+      Overall Risk: ${riskLevel}
+    </div>
+    <div class="confidential">CONFIDENTIAL</div>
+  </div>
+
+  <div class="content">
+
+    <!-- TABLE OF CONTENTS -->
+    <div class="section page-break">
+      <h2>Table of Contents</h2>
+      <div class="toc">
+        <a href="#exec"><span class="toc-num">1.</span> Executive Summary</a>
+        <a href="#scope"><span class="toc-num">2.</span> Scope of Assessment</a>
+        <a href="#methodology"><span class="toc-num">3.</span> Methodology</a>
+        <a href="#risk"><span class="toc-num">4.</span> Risk Classification</a>
+        <a href="#summary"><span class="toc-num">5.</span> Findings Summary</a>
+        <a href="#metrics"><span class="toc-num">6.</span> Detailed Metrics</a>
+        <a href="#findings"><span class="toc-num">7.</span> Detailed Findings</a>
+        <a href="#appendix"><span class="toc-num">8.</span> Appendix — Files Analyzed</a>
+      </div>
+    </div>
+
+    <!-- 1. EXECUTIVE SUMMARY -->
+    <div class="section" id="exec">
+      <h2>1. Executive Summary</h2>
+      <p>
+        ContextCrafter performed an automated code security and quality assessment of the
+        <strong>${esc(repo.fullName)}</strong> repository on <strong>${dateStr}</strong>.
+        The analysis examined <strong>${currentAnalyzedFiles.length} source file${currentAnalyzedFiles.length !== 1 ? "s" : ""}</strong>
+        across four key dimensions: Security, Performance, Architecture, and Maintainability.
+      </p>
+      <p>
+        The assessment identified <strong>${currentReview.suggestions.length} finding${currentReview.suggestions.length !== 1 ? "s" : ""}</strong>
+        requiring attention. The overall risk level is classified as
+        <strong style="color:${riskColor};">${riskLevel}</strong> with a composite score of
+        <strong>${overallScore}/100</strong>.
+      </p>
+      <p>
+        The security analysis yielded a score of <strong>${currentReview.security.score}/100</strong>
+        with <strong>${currentReview.security.issues.length}</strong> issue${currentReview.security.issues.length !== 1 ? "s" : ""} detected at
+        <strong>${secSevLabel}</strong> severity.
+        Performance was rated at <strong>${currentReview.performance.score}/100</strong>,
+        architecture adherence at <strong>${currentReview.architecture.adherence}%</strong>,
+        and maintainability received a grade of <strong>${currentReview.maintainability.grade}</strong>.
+      </p>
+      <p>
+        This report provides detailed descriptions of each finding including impact assessments,
+        evidence with code excerpts, and actionable remediation guidance. It is recommended that
+        all high-severity findings be addressed before the next deployment cycle.
+      </p>
+    </div>
+
+    <!-- 2. SCOPE -->
+    <div class="section" id="scope">
+      <h2>2. Scope of Assessment</h2>
+      <table class="risk-matrix">
+        <tr><th style="width:180px;">Parameter</th><th>Details</th></tr>
+        <tr><td><strong>Target Repository</strong></td><td>${esc(repo.fullName)}</td></tr>
+        <tr><td><strong>Assessment Type</strong></td><td>Automated Static Analysis (SAST) — AI-Assisted Code Review</td></tr>
+        <tr><td><strong>Files in Scope</strong></td><td>${currentAnalyzedFiles.length} files</td></tr>
+        <tr><td><strong>Analysis Date</strong></td><td>${dateStr} at ${timeStr}</td></tr>
+        <tr><td><strong>Report ID</strong></td><td style="font-family:monospace;">${reportId}</td></tr>
+        <tr><td><strong>Tool</strong></td><td>ContextCrafter AI Code Review Engine</td></tr>
+      </table>
+    </div>
+
+    <!-- 3. METHODOLOGY -->
+    <div class="section" id="methodology">
+      <h2>3. Methodology</h2>
+      <p>The assessment followed a systematic approach aligned with industry-standard practices:</p>
+      <ol style="margin:12px 0 12px 20px;color:#475569;">
+        <li style="margin-bottom:8px;"><strong>Static Code Analysis:</strong> Source files were parsed and analyzed for common vulnerability patterns including injection flaws, authentication weaknesses, and insecure data handling.</li>
+        <li style="margin-bottom:8px;"><strong>Performance Profiling:</strong> Code patterns were evaluated for computational complexity, memory efficiency, unnecessary re-renders, and potential bottlenecks.</li>
+        <li style="margin-bottom:8px;"><strong>Architecture Review:</strong> The codebase structure was evaluated against established design patterns including separation of concerns, dependency management, and modular architecture.</li>
+        <li style="margin-bottom:8px;"><strong>Maintainability Assessment:</strong> Code quality metrics such as cyclomatic complexity, code duplication, documentation coverage, and naming conventions were analyzed.</li>
+        <li style="margin-bottom:8px;"><strong>AI-Powered Analysis:</strong> Machine learning models were used to identify subtle patterns and provide context-aware recommendations beyond what rule-based tools can detect.</li>
+      </ol>
+    </div>
+
+    <!-- 4. RISK CLASSIFICATION -->
+    <div class="section page-break" id="risk">
+      <h2>4. Risk Classification</h2>
+      <p>Findings are classified according to the following severity scale:</p>
+      <table class="risk-matrix">
+        <tr><th>Severity</th><th>Score Range</th><th>Description</th><th>Expected Response</th></tr>
+        <tr>
+          <td style="color:#7f1d1d;font-weight:700;">CRITICAL</td>
+          <td>0 — 39</td>
+          <td>Exploitable vulnerabilities with direct, severe impact on confidentiality, integrity, or availability.</td>
+          <td>Immediate remediation required. Block deployment.</td>
+        </tr>
+        <tr>
+          <td style="color:#dc2626;font-weight:700;">HIGH</td>
+          <td>40 — 59</td>
+          <td>Significant security or quality issues that could be exploited under specific conditions.</td>
+          <td>Remediate within the current sprint before release.</td>
+        </tr>
+        <tr>
+          <td style="color:#d97706;font-weight:700;">MEDIUM</td>
+          <td>60 — 79</td>
+          <td>Issues that may degrade application quality or introduce indirect security risks.</td>
+          <td>Plan remediation within 1–2 sprints.</td>
+        </tr>
+        <tr>
+          <td style="color:#16a34a;font-weight:700;">LOW</td>
+          <td>80 — 100</td>
+          <td>Minor improvements or best-practice recommendations with limited immediate risk.</td>
+          <td>Address during routine maintenance or refactoring.</td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- 5. FINDINGS SUMMARY TABLE -->
+    <div class="section" id="summary">
+      <h2>5. Findings Summary</h2>
+      ${currentReview.suggestions.length > 0 ? `
+      <table class="risk-matrix" style="width:100%;">
+        <tr><th style="width:40px;">#</th><th>Finding</th><th style="width:110px;">Category</th><th style="width:80px;">Severity</th><th style="width:140px;">File</th></tr>
+        ${summaryTableRows}
+      </table>` : `<p style="color:#16a34a;font-weight:600;">No findings were identified. The codebase passes all checks.</p>`}
+    </div>
+
+    <!-- 6. DETAILED METRICS -->
+    <div class="section page-break" id="metrics">
+      <h2>6. Detailed Metrics</h2>
+      <div class="metrics-grid">
+        <div class="metric-box">
+          <div class="m-label">Security</div>
+          <div class="m-value" style="color:${severityColor[currentReview.security.severity as keyof typeof severityColor] ?? "#0891b2"};">${currentReview.security.score}</div>
+          <div class="m-sub">${currentReview.security.issues.length} issue${currentReview.security.issues.length !== 1 ? "s" : ""}</div>
+        </div>
+        <div class="metric-box">
+          <div class="m-label">Performance</div>
+          <div class="m-value" style="color:#0891b2;">${currentReview.performance.score}</div>
+          <div class="m-sub">${currentReview.performance.issues.length} issue${currentReview.performance.issues.length !== 1 ? "s" : ""}</div>
+        </div>
+        <div class="metric-box">
+          <div class="m-label">Architecture</div>
+          <div class="m-value" style="color:#4f46e5;">${currentReview.architecture.adherence}%</div>
+          <div class="m-sub">Adherence</div>
+        </div>
+        <div class="metric-box">
+          <div class="m-label">Maintainability</div>
+          <div class="m-value" style="color:${gradeColor[currentReview.maintainability.grade as keyof typeof gradeColor] ?? "#9333ea"};">${currentReview.maintainability.grade}</div>
+          <div class="m-sub">Grade</div>
+        </div>
+      </div>
+
+      <h3>6.1 Security Issues</h3>
+      <ul style="margin:8px 0 16px 20px;color:#475569;">
+        ${currentReview.security.issues.length > 0 ? currentReview.security.issues.map((iss) => `<li style="margin-bottom:4px;">${esc(iss)}</li>`).join("") : `<li style="color:#16a34a;">No security issues detected</li>`}
+      </ul>
+
+      <h3>6.2 Performance Issues</h3>
+      <ul style="margin:8px 0 16px 20px;color:#475569;">
+        ${currentReview.performance.issues.length > 0 ? currentReview.performance.issues.map((iss) => `<li style="margin-bottom:4px;">${esc(iss)}</li>`).join("") : `<li style="color:#16a34a;">No performance issues detected</li>`}
+      </ul>
+
+      <h3>6.3 Architecture Patterns Detected</h3>
+      <ul style="margin:8px 0 16px 20px;color:#475569;">
+        ${currentReview.architecture.patterns.map((p) => `<li style="margin-bottom:4px;">${esc(p)}</li>`).join("")}
+      </ul>
+
+      <h3>6.4 Maintainability Issues</h3>
+      <ul style="margin:8px 0 16px 20px;color:#475569;">
+        ${currentReview.maintainability.issues.length > 0 ? currentReview.maintainability.issues.map((iss) => `<li style="margin-bottom:4px;">${esc(iss)}</li>`).join("") : `<li style="color:#16a34a;">Good maintainability</li>`}
+      </ul>
+    </div>
+
+    <!-- 7. DETAILED FINDINGS -->
+    <div class="section" id="findings">
+      <h2>7. Detailed Findings</h2>
+      ${currentReview.suggestions.length > 0 ? findingsHtml : `<p style="color:#16a34a;font-weight:600;">No actionable findings. The analyzed code meets all quality and security thresholds.</p>`}
+    </div>
+
+    <!-- 8. APPENDIX -->
+    <div class="section page-break" id="appendix">
+      <h2>8. Appendix — Files Analyzed</h2>
+      <p>The following ${currentAnalyzedFiles.length} file${currentAnalyzedFiles.length !== 1 ? "s were" : " was"} included in this assessment:</p>
+      <table class="risk-matrix" style="margin-top:12px;">
+        <tr><th style="width:40px;">#</th><th>File Path</th></tr>
+        ${currentAnalyzedFiles.map((f, i) => `<tr><td style="text-align:center;font-size:12px;color:#94a3b8;">${i + 1}</td><td style="font-family:monospace;font-size:11px;color:#334155;">${esc(f)}</td></tr>`).join("")}
+      </table>
+    </div>
+
+    <!-- FOOTER -->
+    <div class="footer-bar">
+      <span>CONFIDENTIAL — ${esc(repo.fullName)}</span>
+      <span>Report ${reportId} — ${dateStr}</span>
+      <span>Generated by ContextCrafter</span>
+    </div>
+
+  </div>
+</body>
+</html>`;
+
+    // Open in new window and trigger print (Save as PDF)
+    const printWindow = window.open("", "_blank");
+    if (printWindow) {
+      printWindow.document.write(html);
+      printWindow.document.close();
+      printWindow.onload = () => {
+        printWindow.print();
+      };
+    }
+  }
+
   async function reanalyze() {
     if (selectedFiles.length === 0) return;
     setAnalyzing(true);
@@ -151,7 +542,7 @@ export default function CodeReviewClient({
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <button className="glass-panel font-label-xs text-[12px] font-semibold tracking-wider text-on-surface hover:bg-white/5 px-4 py-2 rounded-md cursor-pointer transition-colors border border-outline-variant/50">
+          <button onClick={exportReport} className="glass-panel font-label-xs text-[12px] font-semibold tracking-wider text-on-surface hover:bg-white/5 px-4 py-2 rounded-md cursor-pointer transition-colors border border-outline-variant/50">
             Export Report
           </button>
           <button

@@ -61,7 +61,11 @@ export default async function CodeReviewPage({
 
   // AI Review
   let review = {
-    security: { score: 65, issues: ["XSS Vulnerability", "CSRF Token Missing"], severity: "high" },
+    security: {
+      score: 65,
+      issues: ["XSS Vulnerability", "CSRF Token Missing"],
+      severity: "high",
+    },
     performance: { score: 80, issues: [] as string[] },
     architecture: { score: 90, adherence: 85, patterns: [] as string[] },
     maintainability: { grade: "B", issues: [] as string[] },
@@ -115,7 +119,7 @@ Return this exact JSON structure:
 }`;
 
       const completion = await groq.chat.completions.create({
-        model: "llama-3.3-70b-versatile",
+        model: "openai/gpt-oss-120b",
         messages: [{ role: "user", content: prompt }],
         max_tokens: 1500,
       });
