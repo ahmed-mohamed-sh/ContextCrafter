@@ -89,7 +89,7 @@ ${fileContents.length > 0 ? `Files context:\n${fileContents.map((f) => `// ${f.p
 Generate the documentation now. Return only the documentation content, no extra explanation.`;
 
   const completion = await groq.chat.completions.create({
-    model: "openai/gpt-oss-120b",
+    model: "openai/gpt-oss-20b",
     messages: [{ role: "user", content: prompt }],
     max_tokens: 2000,
   });

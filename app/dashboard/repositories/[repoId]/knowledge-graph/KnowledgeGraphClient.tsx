@@ -287,7 +287,9 @@ export default function KnowledgeGraphClient({ repo, graph }: Props) {
         {/* Search Bar */}
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 w-80">
           <div className="glass-panel rounded-lg flex items-center gap-2 px-3 py-2 border border-white/10">
-            <span className="material-symbols-outlined text-[18px] text-on-surface-variant">search</span>
+            <span className="material-symbols-outlined text-[18px] text-on-surface-variant">
+              search
+            </span>
             <input
               type="text"
               value={searchQuery}
@@ -297,7 +299,9 @@ export default function KnowledgeGraphClient({ repo, graph }: Props) {
                 const q = e.target.value.trim().toLowerCase();
                 if (q) {
                   const matches = safeGraph.nodes.filter(
-                    (n) => n.label.toLowerCase().includes(q) || n.path.toLowerCase().includes(q),
+                    (n) =>
+                      n.label.toLowerCase().includes(q) ||
+                      n.path.toLowerCase().includes(q),
                   );
                   if (matches.length === 1) setSelectedNode(matches[0]);
                 }
@@ -308,14 +312,22 @@ export default function KnowledgeGraphClient({ repo, graph }: Props) {
             />
             {searchQuery && (
               <>
-                <span className="text-[11px] text-on-surface-variant" style={{ fontFamily: "JetBrains Mono, monospace" }}>
-                  {searchMatches.length} match{searchMatches.length !== 1 ? "es" : ""}
+                <span
+                  className="text-[11px] text-on-surface-variant"
+                  style={{ fontFamily: "JetBrains Mono, monospace" }}
+                >
+                  {searchMatches.length} match
+                  {searchMatches.length !== 1 ? "es" : ""}
                 </span>
                 <button
-                  onClick={() => { setSearchQuery(""); }}
+                  onClick={() => {
+                    setSearchQuery("");
+                  }}
                   className="text-on-surface-variant hover:text-white transition-colors cursor-pointer"
                 >
-                  <span className="material-symbols-outlined text-[16px]">close</span>
+                  <span className="material-symbols-outlined text-[16px]">
+                    close
+                  </span>
                 </button>
               </>
             )}
@@ -326,14 +338,29 @@ export default function KnowledgeGraphClient({ repo, graph }: Props) {
           onClick={analyzeImports}
           disabled={analyzing}
           className="absolute top-4 right-4 z-20 flex items-center gap-2 px-4 py-2 rounded-lg transition-all hover:brightness-110 disabled:opacity-50"
-          style={{ background: "#4f46e5", color: "#dad7ff", fontFamily: "Inter, sans-serif", fontSize: 13, fontWeight: 600 }}
+          style={{
+            background: "#4f46e5",
+            color: "#dad7ff",
+            fontFamily: "Inter, sans-serif",
+            fontSize: 13,
+            fontWeight: 600,
+          }}
         >
           {analyzing ? (
             <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
           ) : (
-            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>account_tree</span>
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: 18 }}
+            >
+              account_tree
+            </span>
           )}
-          {analyzing ? "Analyzing..." : analyzed ? "Re-analyze Imports" : "Analyze Real Imports"}
+          {analyzing
+            ? "Analyzing..."
+            : analyzed
+              ? "Re-analyze Imports"
+              : "Analyze Real Imports"}
         </button>
 
         {/* Legend */}
@@ -487,16 +514,16 @@ export default function KnowledgeGraphClient({ repo, graph }: Props) {
               {showCode && (
                 <div className="border-t border-white/10 flex flex-col max-h-[40vh]">
                   <div className="flex items-center justify-between px-4 py-2 bg-surface-container-low/80 border-b border-white/5">
-                    <span
-                      className="text-[10px] text-on-surface-variant uppercase font-semibold tracking-wider"
-                    >
+                    <span className="text-[10px] text-on-surface-variant uppercase font-semibold tracking-wider">
                       Source Code
                     </span>
                     <button
                       onClick={() => setShowCode(false)}
                       className="cursor-pointer text-on-surface-variant hover:text-white transition-colors"
                     >
-                      <span className="material-symbols-outlined text-[16px]">close</span>
+                      <span className="material-symbols-outlined text-[16px]">
+                        close
+                      </span>
                     </button>
                   </div>
                   <div className="flex-1 overflow-auto p-4 bg-[#0d1117]">

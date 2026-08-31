@@ -87,6 +87,7 @@ model Repository {
   decisions       Decision[]
   embeddings      Embedding[]
   files           RepoFile[]
+  conventions Convention[]
   user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
@@ -122,6 +123,20 @@ model Embedding {
   file       RepoFile?  @relation(fields: [fileId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
+}
+
+model Convention {
+  id           String @id @default(cuid())
+  repositoryId String
+  type         String  // "naming" | "structure" | "pattern"
+  rule         String  // "Components use PascalCase"
+  examples     String[] // ["Button.tsx", "Header.tsx"]
+  violations   String[] // files that violate
+  confidence   Int      @default(0)
+  evidence     Int      @default(0)
+
+
+  repository Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
 }
 
 model FileConnection {
