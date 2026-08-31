@@ -70,6 +70,15 @@ export default function TechnicalDeptClient({
   roiSummary,
 }: Props) {
   const [expandedCluster, setExpandedCluster] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<"all" | "critical" | "major" | "minor">("all");
+
+  async function rescan() {
+    const res = await fetch(`/api/repos/${repo.id}/analyze-debt`, {
+      method: "POST",
+    });
+    const data = await res.json();
+    if (data.clusters) window.location.reload();
+  }
 
   return (
     <div className="flex-1 overflow-y-auto p-8 relative z-10 w-full">
@@ -108,33 +117,36 @@ export default function TechnicalDeptClient({
         </div>
         <div className="flex gap-3">
           <button
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all"
+            onClick={() => {
+              const filters: ("all" | "critical" | "major" | "minor")[] = ["all", "critical", "major", "minor"];
+              const next = filters[(filters.indexOf(activeFilter) + 1) % filters.length];
+              setActiveFilter(next);
+            }}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all cursor-pointer hover:bg-white/5"
             style={{
               fontFamily: "Inter, sans-serif",
               fontSize: 12,
               fontWeight: 600,
               letterSpacing: "0.05em",
-              color: "#c7c4d8",
-              background: "rgba(19,27,46,0.6)",
-              border: "1px solid rgba(255,255,255,0.1)",
+              color: activeFilter !== "all" ? "#dae2fd" : "#c7c4d8",
+              background: activeFilter !== "all" ? "rgba(79, 70, 229, 0.2)" : "rgba(19,27,46,0.6)",
+              border: activeFilter !== "all" ? "1px solid #4f46e5" : "1px solid rgba(255,255,255,0.1)",
             }}
           >
             <span className="material-symbols-outlined text-[16px]">
-              filter_list
+              {activeFilter === "all" ? "filter_list" : "filter_list_off"}
             </span>
-            Filter
+            {activeFilter === "all" ? "Filter" : `Severity: ${activeFilter}`}
           </button>
           <button
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all hover:brightness-110"
+            onClick={rescan}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all hover:brightness-110 cursor-pointer"
             style={{
-              fontFamily: "Inter, sans-serif",
+              background: "#4f46e5",
+              color: "#dad7ff",
               fontSize: 12,
               fontWeight: 600,
-              letterSpacing: "0.05em",
-              color: "#dad7ff",
-              background: "#4f46e5",
-              borderTop: "1px solid rgba(255,255,255,0.2)",
-              boxShadow: "0 4px 12px rgba(79,70,229,0.2)",
+              fontFamily: "Inter, sans-serif",
             }}
           >
             <span className="material-symbols-outlined text-[16px]">scan</span>
@@ -381,7 +393,11 @@ export default function TechnicalDeptClient({
             </h3>
           </div>
           <div>
-            {clusters.map((cluster) => {
+            {clusters.filter(c => activeFilter === "all" || c.severity === activeFilter).length === 0 ? (
+              <div className="p-8 text-center text-on-surface-variant font-code-md text-sm">
+                No clusters match the selected filter.
+              </div>
+            ) : clusters.filter(c => activeFilter === "all" || c.severity === activeFilter).map((cluster) => {
               const s = severityStyles[cluster.severity];
               const isExpanded = expandedCluster === cluster.id;
 

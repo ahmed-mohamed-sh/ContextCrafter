@@ -59,7 +59,7 @@ Return this exact JSON:
 }`;
 
   const completion = await groq.chat.completions.create({
-    model: "openai/gpt-oss-120b",
+    model: "openai/gpt-oss-20b",
     messages: [{ role: "user", content: prompt }],
     max_tokens: 1500,
   });

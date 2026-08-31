@@ -35,6 +35,9 @@ export function ChatClient({ repo, chatSessions, user }: Props) {
 
   const [indexing, setIndexing] = useState(false);
   const [indexed, setIndexed] = useState(false);
+  const [isLoadingStatus, setIsLoadingStatus] = useState(true);
+
+  const [conventionsLearned, setConventionsLearned] = useState(false);
 
   async function buildIndex() {
     setIndexing(true);
@@ -48,6 +51,51 @@ export function ChatClient({ repo, chatSessions, user }: Props) {
       setIndexing(false);
     }
   }
+
+  async function analyzeConventions() {
+    try {
+      const res = await fetch(
+        `/api/repos/${repo.id}/analyze-conventions`,
+        {
+          method: "POST",
+        },
+      );
+
+      if (!res.ok) {
+        throw new Error("Failed to analyze conventions");
+      }
+
+      setConventionsLearned(true);
+
+      alert("Conventions analyzed!");
+    } catch (error) {
+      console.error(error);
+      alert("Failed to analyze conventions");
+    }
+  }
+
+  useEffect(() => {
+    async function loadIndexStatus() {
+      try {
+        const res = await fetch(
+          `/api/repos/${repo.id}/index/status`,
+        );
+
+        if (!res.ok) return;
+
+        const data = await res.json();
+
+        setIndexed(data.indexed);
+        setConventionsLearned(data.conventionsLearned);
+      } catch (error) {
+        console.error("Failed to load index status:", error);
+      } finally {
+        setIsLoadingStatus(false);
+      }
+    }
+
+    loadIndexStatus();
+  }, [repo.id]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -312,23 +360,39 @@ export function ChatClient({ repo, chatSessions, user }: Props) {
                     I understand your entire codebase
                   </p>
                 </div>
-                {!indexed && (
+                <div className="flex gap-4 items-center mt-6">
                   <button
                     onClick={buildIndex}
-                    disabled={indexing}
+                    disabled={isLoadingStatus || indexing}
                     className="cursor-pointer flex items-center gap-2 px-6 py-3 rounded-lg transition-all hover:brightness-110 disabled:opacity-50"
                     style={{
-                      background: "#4f46e5",
+                      background: indexed ? "rgba(79, 70, 229, 0.25)" : "#4f46e5",
                       color: "#dad7ff",
                       fontFamily: "Inter, sans-serif",
                       fontSize: 14,
                       fontWeight: 600,
+                      border: indexed ? "1px solid #4f46e5" : "none",
                     }}
                   >
-                    {indexing ? (
+                    {isLoadingStatus ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                        Checking...
+                      </>
+                    ) : indexing ? (
                       <>
                         <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
                         Building Index...
+                      </>
+                    ) : indexed ? (
+                      <>
+                        <span
+                          className="material-symbols-outlined"
+                          style={{ fontSize: 18 }}
+                        >
+                          refresh
+                        </span>
+                        Rebuild Index
                       </>
                     ) : (
                       <>
@@ -338,11 +402,42 @@ export function ChatClient({ repo, chatSessions, user }: Props) {
                         >
                           hub
                         </span>
-                        Build Knowledge Index
+                        Build Index
                       </>
                     )}
                   </button>
-                )}
+                  <button
+                    onClick={analyzeConventions}
+                    disabled={isLoadingStatus}
+                    className="cursor-pointer flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-all hover:bg-white/5 disabled:opacity-50"
+                    style={{
+                      background: conventionsLearned ? "rgba(52, 211, 153, 0.1)" : "rgba(255,255,255,0.05)",
+                      border: conventionsLearned ? "1px solid rgba(52, 211, 153, 0.3)" : "1px solid rgba(255,255,255,0.1)",
+                      color: conventionsLearned ? "#34d399" : "#dae2fd",
+                    }}
+                  >
+                    {isLoadingStatus ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                        Checking...
+                      </>
+                    ) : conventionsLearned ? (
+                      <>
+                        <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
+                          refresh
+                        </span>
+                        Relearn Conventions
+                      </>
+                    ) : (
+                      <>
+                        <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
+                          rule
+                        </span>
+                        Learn Conventions
+                      </>
+                    )}
+                  </button>
+                </div>
                 {/* Suggested questions */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-lg">
                   {[

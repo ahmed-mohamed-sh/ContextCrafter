@@ -39,7 +39,12 @@ export async function POST(
 
   const repo = await db.repository.findUnique({
     where: { id: repoId, userId: session.user.id },
-    include: { files: { take: 50, select: { path: true, language: true } } },
+    include: {
+      files: {
+        select: { path: true, language: true },
+        orderBy: { path: "asc" },
+      },
+    },
   });
 
   if (!repo)
@@ -61,102 +66,91 @@ export async function POST(
     data: { chatSessionId: currentSessionId, role: "USER", content: message },
   });
 
-  const relevantChunks = await searchSimilar(repoId, message, 15);
+  /*
+   * Build the file inventory from DB (metadata layer).
+   * This lets the AI answer structural questions like
+   * "what files exist?" without relying on RAG.
+   */
+  const fileIndex = repo.files
+    .map((f) => `- ${f.path}${f.language ? ` (${f.language})` : ""}`)
+    .join("\n");
 
-  console.log(
-    "RAG RESULTS:",
-    relevantChunks.map((c) => ({
-      path: c.metadata?.path,
-      score: c.score,
-      preview: c.content.slice(0, 300),
-    })),
-  );
+  /*
+   * RAG search for code-level questions.
+   */
+  const relevantChunks = await searchSimilar(repoId, message, 10);
 
-  const MAX_CONTEXT_CHARS = 16000;
+  /*
+   * Budget: the Groq free tier caps at 8,000 TPM.
+   *
+   * Rough allocation (~4 chars/token):
+   *   System prompt template  ~800 tok
+   *   File inventory           ~600 tok (134 files × ~18 chars avg)
+   *   RAG context             ~2,000 tok
+   *   History + user message   ~600 tok
+   *   max_tokens (response)   ~1,024 tok
+   *   ────────────────────────────────
+   *   Total                   ~5,024 tok
+   */
+  const MAX_CONTEXT_CHARS = 8_000;
 
   const context =
     relevantChunks.length > 0
       ? relevantChunks
-          .map((c) => `// ${c.metadata?.path ?? "unknown"}\n${c.content}`)
+          .map((c) => `[SOURCE: ${c.metadata?.path ?? "unknown"}]\n${c.content}`)
           .join("\n\n---\n\n")
           .slice(0, MAX_CONTEXT_CHARS)
-      : "No specific context found.";
+      : "No specific code context retrieved for this question.";
 
-  const systemPrompt = `
-You are an expert AI assistant that deeply understands the codebase "${repo.name}".
+  const sources = [
+    ...new Set(
+      relevantChunks
+        .map((c) => c.metadata?.path)
+        .filter((p): p is string => !!p),
+    ),
+  ].map((path) => ({ path }));
 
-Your job is to answer questions about this repository accurately using ONLY the retrieved repository context.
+  const systemPrompt = `You are an expert AI assistant for the codebase "${repo.name}".
+
+You have TWO sources of truth:
+1. **Repository file inventory** — authoritative list of all files.
+2. **Retrieved code context** — relevant code snippets from RAG search.
 
 IMPORTANT RULES:
+1. Ground every technical claim in the retrieved code context or file inventory.
+2. Do NOT invent files, functions, variables, or implementation details.
+3. Do NOT assume framework behavior unless the code explicitly shows it.
+4. If evidence is insufficient, say so clearly.
+5. Reference file paths and code when available.
 
-1. Ground every technical claim in the retrieved repository context.
-2. Do NOT invent files, functions, variables, configuration, database behavior, or implementation details.
-3. Do NOT assume framework or library behavior unless it is explicitly demonstrated by the repository.
-4. If the repository does not provide enough evidence, clearly say so.
-5. Distinguish between:
-   - What the repository explicitly shows
-   - What can reasonably be inferred
-   - What cannot be determined from the repository
-6. When answering, reference the relevant file paths and code whenever available.
-7. Prefer a precise "The repository does not provide enough evidence to determine this" over an unsupported answer.
-
-FLOW / TRACEABILITY RULES:
-
-When explaining a flow across multiple steps, EVERY transition in the flow must be supported by repository evidence.
-
-For example, do NOT create a chain such as:
-
-database → session → JWT → cookie → client
-
-unless the repository explicitly contains evidence for each transition.
-
-For EVERY step in a requested flow:
-- Identify the exact repository code that supports that step.
-- Explain what that code proves.
-- Do not use general knowledge of the framework to fill missing steps.
-
-If a transition is implemented inside an external dependency or library and the repository does not contain its implementation, explicitly mark that transition as:
-
-"Not proven by the repository."
-
-A configuration option such as:
-strategy: "jwt"
+FILE INVENTORY RULES:
+The file inventory below is authoritative for which files exist.
+If the user asks what files exist, lists files, or asks about structure — use the inventory directly.
+Do not claim a file is unknown if it appears in the inventory.
 
 SOURCE AND EVIDENCE RULES:
-
-The retrieved context is the only source of repository truth.
-
-Each [SOURCE] block represents evidence from a specific repository file.
-
-When making a technical claim:
-- Prefer citing the file path from the relevant [SOURCE].
-- Do not combine information from different sources unless the code supports the relationship.
-- If the retrieved sources do not contain enough evidence, say:
-  "The repository does not provide enough evidence to determine this."
-- Never invent a file path, function, variable, or implementation detail.
-
-only proves that the application requests JWT-based sessions. It does NOT, by itself, prove:
-- which fields are encoded into the JWT
-- how the framework internally serializes those fields
-- what the JWT payload contains
-- how the framework stores or retrieves the token
-
+Each [SOURCE] block is evidence from a specific file.
+When making a technical claim, cite the [SOURCE] file path.
+Do not combine information from different sources unless the code supports the relationship.
 Never treat framework behavior as repository evidence.
 
-Do not claim that data is stored in a JWT, cookie, database, localStorage, cache, or other persistence mechanism unless the repository explicitly demonstrates that behavior.
+FLOW / TRACEABILITY RULES:
+When explaining a flow, EVERY transition must be supported by repository evidence.
+If a transition is inside an external library, mark it as "Not proven by the repository."
 
-Retrieved repository context:
-                        
 Repository info:
 - Language: ${repo.language ?? "Unknown"}
 - Total files: ${repo.totalFiles}
 - Components: ${repo.totalComponents}
 - APIs: ${repo.totalAPIs}
 
-Relevant code context:
+Repository file inventory:
+${fileIndex}
+
+Retrieved code context:
 ${context}
 
-Answer questions about this codebase accurately. Reference specific files and code when relevant.`;
+Answer questions about this codebase accurately.`;
   const completion = await groq.chat.completions.create({
     model: "openai/gpt-oss-120b",
     messages: [
@@ -190,6 +184,6 @@ Answer questions about this codebase accurately. Reference specific files and co
   return NextResponse.json({
     response,
     sessionId: currentSessionId,
-    sources: [],
+    sources,
   });
 }
