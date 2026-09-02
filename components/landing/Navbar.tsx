@@ -21,14 +21,20 @@ export function Navbar() {
         </span>
       </div>
       <div className="hidden md:flex items-center gap-6">
-        {["Features", "Architecture", "Pricing"].map((item) => (
+        {[
+          { name: "Features", href: "#features" },
+          { name: "How It Works", href: "#how-it-works" },
+          { name: "Comparison", href: "#comparison" },
+          { name: "Security", href: "#security" },
+          { name: "Pricing", href: "#pricing" },
+        ].map((item) => (
           <Link
-            key={item}
-            href={`#${item.toLowerCase()}`}
+            key={item.name}
+            href={item.href}
             className="text-[12px] font-semibold tracking-widest text-on-surface-variant hover:text-[#c3c0ff] transition-colors uppercase"
             style={{ fontFamily: "Inter, sans-serif" }}
           >
-            {item}
+            {item.name}
           </Link>
         ))}
       </div>
