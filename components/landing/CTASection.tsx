@@ -15,8 +15,8 @@ export function CTASection() {
         }}
       >
         {/* Background ambient glow circles */}
-        <div className="w-[500px] h-[500px] rounded-full border border-white/5 opacity-30 absolute pointer-events-none" />
-        <div className="w-[300px] h-[300px] rounded-full border border-white/5 opacity-30 absolute pointer-events-none" />
+        <div className="w-125500px] rounded-full border border-white/5 opacity-30 absolute pointer-events-none" />
+        <div className="w-75 h-75 rounded-full border border-white/5 opacity-30 absolute pointer-events-none" />
 
         {/* Badge */}
         <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-primary-container/30 border border-primary-container/40 text-xs font-semibold text-[#c3c0ff] tracking-wide uppercase mb-6 relative z-10">
