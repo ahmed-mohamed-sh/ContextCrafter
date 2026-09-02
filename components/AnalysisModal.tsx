@@ -63,7 +63,8 @@ export function AnalysisModal({
   const displayProgress = progressPercent ?? autoProgress;
   // Circumference of circle with r=45: 2 * Math.PI * 45 ≈ 282.74
   const circumference = 283;
-  const strokeDashoffset = circumference - (displayProgress / 100) * circumference;
+  const strokeDashoffset =
+    circumference - (displayProgress / 100) * circumference;
 
   return (
     <AnimatePresence>
@@ -88,9 +89,9 @@ export function AnalysisModal({
                 "radial-gradient(circle at center, rgba(79, 70, 229, 0.2) 0%, rgba(11, 19, 38, 0) 70%)",
             }}
           >
-            <div className="w-[850px] h-[850px] rounded-full border border-white/5 opacity-50 absolute" />
-            <div className="w-[620px] h-[620px] rounded-full border border-white/5 opacity-50 absolute" />
-            <div className="w-[420px] h-[420px] rounded-full border border-white/5 opacity-50 absolute" />
+            <div className="w-212.5 h-212.5 rounded-full border border-white/5 opacity-50 absolute" />
+            <div className="w-155 h-155 rounded-full border border-white/5 opacity-50 absolute" />
+            <div className="w-105 h-105 rounded-full border border-white/5 opacity-50 absolute" />
           </div>
 
           <motion.div
@@ -212,11 +213,14 @@ export function AnalysisModal({
                   const isPending = index > currentStepIndex;
 
                   return (
-                    <div key={step.label} className="flex items-center gap-4 relative">
+                    <div
+                      key={step.label}
+                      className="flex items-center gap-4 relative"
+                    >
                       {/* Connection Line connecting to the next step */}
                       {index < steps.length - 1 && (
                         <div
-                          className="absolute left-4 top-8 bottom-[-20px] w-px"
+                          className="absolute left-4 top-8 -bottom-5 w-px"
                           style={{
                             backgroundColor: isCompleted
                               ? "rgba(195, 192, 255, 0.4)"
@@ -231,8 +235,8 @@ export function AnalysisModal({
                           isCompleted
                             ? "bg-[#c3c0ff]/15 border border-[#c3c0ff]/30 text-[#c3c0ff]"
                             : isInProgress
-                            ? "bg-[#2d3449] border border-[#c3c0ff] text-[#c3c0ff] shadow-[0_0_15px_rgba(195,192,255,0.4)]"
-                            : "bg-[#171f33] border border-white/10 text-[#464555]"
+                              ? "bg-[#2d3449] border border-[#c3c0ff] text-[#c3c0ff] shadow-[0_0_15px_rgba(195,192,255,0.4)]"
+                              : "bg-surface-container border border-white/10 text-outline-variant"
                         }`}
                       >
                         {isCompleted ? (
