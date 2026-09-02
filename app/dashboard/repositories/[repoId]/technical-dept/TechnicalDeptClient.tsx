@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { AnalysisModal } from "@/components/AnalysisModal";
 
 interface DebtCluster {
   id: string;
@@ -71,13 +72,24 @@ export default function TechnicalDeptClient({
 }: Props) {
   const [expandedCluster, setExpandedCluster] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<"all" | "critical" | "major" | "minor">("all");
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   async function rescan() {
-    const res = await fetch(`/api/repos/${repo.id}/analyze-debt`, {
-      method: "POST",
-    });
-    const data = await res.json();
-    if (data.clusters) window.location.reload();
+    setIsAnalyzing(true);
+    try {
+      const res = await fetch(`/api/repos/${repo.id}/analyze-debt`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (data.clusters) {
+        window.location.reload();
+      } else {
+        setIsAnalyzing(false);
+      }
+    } catch (e) {
+      console.error(e);
+      setIsAnalyzing(false);
+    }
   }
 
   return (
@@ -564,6 +576,21 @@ export default function TechnicalDeptClient({
         </div>
       </div>
       <div className="h-16 w-full" />
+
+      {/* Analysis Loading Modal */}
+      <AnalysisModal
+        isOpen={isAnalyzing}
+        title="Analyzing Technical Debt..."
+        description="ContextCrafter is calculating cyclomatic complexity, detecting code duplication, and formulating remediation efforts."
+        steps={[
+          { label: "Parsing repository source files...", icon: "folder_open" },
+          { label: "Calculating cyclomatic complexity...", icon: "account_tree" },
+          { label: "Detecting duplicate & dead code...", icon: "content_copy" },
+          { label: "Computing ROI scores & remediation hours...", icon: "speed" },
+        ]}
+        assetLabel="Repository"
+        assetCount={repo.fullName}
+      />
     </div>
   );
 }

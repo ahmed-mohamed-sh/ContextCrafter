@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { AnalysisModal } from "@/components/AnalysisModal";
 
 interface GraphNode {
   id: string;
@@ -59,8 +60,10 @@ export default function KnowledgeGraphClient({ repo, graph }: Props) {
       if (data.connections >= 0) {
         setAnalyzed(true);
         window.location.reload();
+      } else {
+        setAnalyzing(false);
       }
-    } finally {
+    } catch {
       setAnalyzing(false);
     }
   }
@@ -554,6 +557,21 @@ export default function KnowledgeGraphClient({ repo, graph }: Props) {
           )}
         </div>
       </main>
+
+      {/* Analysis Loading Modal */}
+      <AnalysisModal
+        isOpen={analyzing}
+        title="Analyzing File Dependencies..."
+        description="ContextCrafter is parsing import trees, resolving internal dependencies, and mapping the knowledge graph."
+        steps={[
+          { label: "Parsing AST import statements...", icon: "code" },
+          { label: "Resolving module paths...", icon: "folder_open" },
+          { label: "Mapping node relationships...", icon: "hub" },
+          { label: "Rendering interactive graph...", icon: "account_tree" },
+        ]}
+        assetLabel="Knowledge Nodes"
+        assetCount={`${safeGraph.nodes.length} Components discovered`}
+      />
     </div>
   );
 }

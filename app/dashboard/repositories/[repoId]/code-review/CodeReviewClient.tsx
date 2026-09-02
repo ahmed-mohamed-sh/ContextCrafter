@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { AnalysisModal } from "@/components/AnalysisModal";
 
 interface Review {
   security: { score: number; issues: string[]; severity: string };
@@ -955,6 +956,21 @@ export default function CodeReviewClient({
           </div>
         </div>
       )}
+
+      {/* Analysis Loading Modal */}
+      <AnalysisModal
+        isOpen={analyzing}
+        title="Analyzing Selected Files..."
+        description="ContextCrafter is auditing code security, calculating maintainability, and compiling tailored recommendations."
+        steps={[
+          { label: "Scanning selected source files...", icon: "folder_open" },
+          { label: "Evaluating security and injection patterns...", icon: "security" },
+          { label: "Assessing performance and maintainability...", icon: "speed" },
+          { label: "Formulating code improvement diffs...", icon: "auto_fix_high" },
+        ]}
+        assetLabel="Files in Scope"
+        assetCount={`${selectedFiles.length} file${selectedFiles.length === 1 ? "" : "s"} selected`}
+      />
     </div>
   );
 }

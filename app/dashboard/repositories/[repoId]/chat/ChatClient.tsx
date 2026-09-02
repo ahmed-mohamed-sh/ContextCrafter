@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { AnalysisModal } from "@/components/AnalysisModal";
 
 interface Message {
   id: string;
@@ -39,8 +40,39 @@ export function ChatClient({ repo, chatSessions, user }: Props) {
 
   const [conventionsLearned, setConventionsLearned] = useState(false);
 
+  const [impactFile, setImpactFile] = useState("");
+  const [impactResult, setImpactResult] = useState<string[]>([]);
+  const [showImpact, setShowImpact] = useState(false);
+
+  const [analysisModal, setAnalysisModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    description: string;
+    steps: { label: string; icon?: string }[];
+    assetLabel?: string;
+    assetCount?: string;
+  }>({
+    isOpen: false,
+    title: "",
+    description: "",
+    steps: [],
+  });
+
   async function buildIndex() {
     setIndexing(true);
+    setAnalysisModal({
+      isOpen: true,
+      title: "Building Knowledge Index...",
+      description: "ContextCrafter is parsing files, generating vector embeddings, and structuring semantic context.",
+      steps: [
+        { label: "Scanning repository source files...", icon: "folder_open" },
+        { label: "Generating semantic vector embeddings...", icon: "data_object" },
+        { label: "Structuring knowledge base...", icon: "hub" },
+        { label: "Finalizing retrieval index...", icon: "check_circle" },
+      ],
+      assetLabel: "Repository",
+      assetCount: repo.name,
+    });
     try {
       const res = await fetch(`/api/repos/${repo.id}/index`, {
         method: "POST",
@@ -48,11 +80,27 @@ export function ChatClient({ repo, chatSessions, user }: Props) {
       const data = await res.json();
       if (data.indexed) setIndexed(true);
     } finally {
-      setIndexing(false);
+      setTimeout(() => {
+        setAnalysisModal((prev) => ({ ...prev, isOpen: false }));
+        setIndexing(false);
+      }, 600);
     }
   }
 
   async function analyzeConventions() {
+    setAnalysisModal({
+      isOpen: true,
+      title: "Learning your coding conventions...",
+      description: "ContextCrafter is analyzing architecture patterns and naming rules to provide tailored suggestions.",
+      steps: [
+        { label: "Parsing repository codebase...", icon: "folder_open" },
+        { label: "Extracting naming and structural patterns...", icon: "rule" },
+        { label: "Evaluating architectural conventions...", icon: "architecture" },
+        { label: "Saving learned project rules...", icon: "check_circle" },
+      ],
+      assetLabel: "Repository",
+      assetCount: repo.name,
+    });
     try {
       const res = await fetch(
         `/api/repos/${repo.id}/analyze-conventions`,
@@ -66,11 +114,45 @@ export function ChatClient({ repo, chatSessions, user }: Props) {
       }
 
       setConventionsLearned(true);
-
-      alert("Conventions analyzed!");
     } catch (error) {
       console.error(error);
       alert("Failed to analyze conventions");
+    } finally {
+      setTimeout(() => {
+        setAnalysisModal((prev) => ({ ...prev, isOpen: false }));
+      }, 600);
+    }
+  }
+
+  async function analyzeImpact() {
+    if (!impactFile) return;
+    setAnalysisModal({
+      isOpen: true,
+      title: `Analyzing impact for ${impactFile.split("/").pop()}...`,
+      description: "Tracing upstream dependencies and calculating downstream affected modules.",
+      steps: [
+        { label: "Locating target file in AST...", icon: "description" },
+        { label: "Traversing dependency graph...", icon: "account_tree" },
+        { label: "Identifying affected components...", icon: "warning" },
+      ],
+      assetLabel: "Target File",
+      assetCount: impactFile.split("/").pop() || impactFile,
+    });
+    try {
+      const res = await fetch(`/api/repos/${repo.id}/impact`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filePath: impactFile }),
+      });
+      const data = await res.json();
+      setImpactResult(data.affected || []);
+      setShowImpact(true);
+    } catch (error) {
+      console.error("Failed to analyze impact:", error);
+    } finally {
+      setTimeout(() => {
+        setAnalysisModal((prev) => ({ ...prev, isOpen: false }));
+      }, 600);
     }
   }
 
@@ -774,6 +856,89 @@ export function ChatClient({ repo, chatSessions, user }: Props) {
             </p>
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-6">
+            {/* Impact Analysis */}
+            <div>
+              <p
+                style={{
+                  fontFamily: "Inter, sans-serif",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: "#dae2fd",
+                  marginBottom: 8,
+                }}
+              >
+                Impact Analysis
+              </p>
+              {showImpact && (
+                <div className="mb-3">
+                  <p
+                    style={{
+                      fontFamily: "Inter, sans-serif",
+                      fontSize: 11,
+                      color: "#918fa1",
+                      marginBottom: 8,
+                    }}
+                  >
+                    {impactResult.length} files affected
+                  </p>
+                  {impactResult.map((f) => (
+                    <div
+                      key={f}
+                      className="flex items-center gap-2 p-2 rounded mb-1"
+                      style={{
+                        background: "rgba(255,180,171,0.08)",
+                        border: "1px solid rgba(255,180,171,0.15)",
+                      }}
+                    >
+                      <span
+                        className="material-symbols-outlined"
+                        style={{ fontSize: 12, color: "#ffb4ab" }}
+                      >
+                        warning
+                      </span>
+                      <span
+                        style={{
+                          fontFamily: "JetBrains Mono, monospace",
+                          fontSize: 11,
+                          color: "#dae2fd",
+                        }}
+                      >
+                        {f.split("/").pop()}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="src/auth/service.ts"
+                  value={impactFile}
+                  onChange={(e) => setImpactFile(e.target.value)}
+                  className="flex-1 rounded px-3 py-1.5 text-sm focus:outline-none"
+                  style={{
+                    background: "rgba(0,0,0,0.3)",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    color: "#dae2fd",
+                    fontFamily: "JetBrains Mono, monospace",
+                    fontSize: 12,
+                  }}
+                />
+                <button
+                  onClick={analyzeImpact}
+                  className="px-3 py-1.5 rounded text-sm font-semibold transition-all hover:brightness-110 cursor-pointer"
+                  style={{
+                    background: "#4f46e5",
+                    color: "#dad7ff",
+                    fontFamily: "Inter, sans-serif",
+                    fontSize: 12,
+                  }}
+                >
+                  Analyze
+                </button>
+              </div>
+            </div>
+
             {messages.length === 0 ? (
               <div className="text-center py-8">
                 <p
@@ -886,6 +1051,16 @@ export function ChatClient({ repo, chatSessions, user }: Props) {
           </div>
         </div>
       </div>
+
+      {/* Analysis Loading Modal */}
+      <AnalysisModal
+        isOpen={analysisModal.isOpen}
+        title={analysisModal.title}
+        description={analysisModal.description}
+        steps={analysisModal.steps}
+        assetLabel={analysisModal.assetLabel}
+        assetCount={analysisModal.assetCount}
+      />
     </div>
   );
 }
