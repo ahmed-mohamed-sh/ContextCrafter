@@ -33,8 +33,25 @@ export default function DashboardLayoutClient({
   children,
 }: Props) {
   const [modalOpen, setModalOpen] = useState(false);
+  const [currentTheme, setCurrentTheme] = useState("dark-obsidian");
   const router = useRouter();
   const pathname = usePathname();
+
+  useEffect(() => {
+    const applySavedTheme = () => {
+      const saved = localStorage.getItem("cc_theme_mode") || "dark-obsidian";
+      setCurrentTheme(saved);
+      document.documentElement.setAttribute("data-theme", saved);
+    };
+
+    applySavedTheme();
+    window.addEventListener("theme-change", applySavedTheme);
+    window.addEventListener("storage", applySavedTheme);
+    return () => {
+      window.removeEventListener("theme-change", applySavedTheme);
+      window.removeEventListener("storage", applySavedTheme);
+    };
+  }, []);
 
   useEffect(() => {
     const hasAnalyzing = recentRepos.some(

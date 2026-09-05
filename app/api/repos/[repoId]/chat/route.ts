@@ -1,10 +1,8 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextResponse } from "next/server";
-import Groq from "groq-sdk";
+import { generateAICompletion } from "@/lib/ai";
 import { searchSimilar } from "@/lib/rag";
-
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY! });
 
 export async function GET(
   req: Request,
@@ -151,22 +149,21 @@ Retrieved code context:
 ${context}
 
 Answer questions about this codebase accurately.`;
-  const completion = await groq.chat.completions.create({
-    model: "openai/gpt-oss-120b",
+  const completion = await generateAICompletion({
+    userId: session.user.id,
     messages: [
       { role: "system", content: systemPrompt },
       ...history.map((h: { role: string; content: string }) => ({
-        role: h.role === "USER" ? "user" : "assistant",
+        role: (h.role === "USER" ? "user" : "assistant") as "user" | "assistant",
         content: h.content,
       })),
       { role: "user", content: message },
     ],
-    max_tokens: 1024,
+    maxTokens: 1024,
   });
 
   const response =
-    completion.choices[0]?.message?.content ??
-    "Sorry, I couldn't generate a response.";
+    completion.content || "Sorry, I couldn't generate a response.";
 
   await db.message.create({
     data: {

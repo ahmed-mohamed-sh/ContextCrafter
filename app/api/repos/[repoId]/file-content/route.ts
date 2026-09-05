@@ -5,7 +5,7 @@ import { getUserOctokit } from "@/lib/github";
 
 export async function GET(
   req: Request,
-  { params }: { params: { repoId: string } }
+  { params }: { params: Promise<{ repoId: string }> }
 ) {
   try {
     const session = await auth();

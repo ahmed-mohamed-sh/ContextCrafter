@@ -14,10 +14,19 @@ export default async function SettingsPage() {
         select: {
           id: true,
           name: true,
+          branch: true,
           status: true,
+          autoSync: true,
+          excludedPaths: true,
           updatedAt: true,
         },
         orderBy: { updatedAt: "desc" },
+      },
+      apiKeys: {
+        orderBy: { createdAt: "desc" },
+      },
+      teamMembers: {
+        orderBy: { createdAt: "desc" },
       },
     },
   });
@@ -36,20 +45,52 @@ export default async function SettingsPage() {
   const repos = user.repositories.map((repo) => ({
     id: repo.id,
     name: repo.name,
-    branch: "main",
+    branch: repo.branch || "main",
     status:
       repo.status === "READY"
         ? ("synced" as const)
         : repo.status === "ANALYZING"
           ? ("syncing" as const)
           : ("error" as const),
-    autoSync: true,
+    autoSync: repo.autoSync ?? true,
+    excludedPaths: repo.excludedPaths || ["node_modules", ".next", "dist", "coverage", ".git"],
   }));
 
   const userSettings = await db.userSettings.findUnique({
     where: { userId: session.user.id },
-    select: { llmProvider: true, llmApiKey: true, embedModel: true },
   });
+
+  const apiKeys = user.apiKeys.map((k) => ({
+    id: k.id,
+    name: k.name,
+    key: `${k.key.substring(0, 10)}••••••••••••••••${k.key.slice(-4)}`,
+    status: k.status as "active" | "read-only",
+    created: k.createdAt.toISOString().split("T")[0],
+    lastUsed: k.lastUsedAt ? k.lastUsedAt.toISOString().split("T")[0] : "Never",
+    expires: k.expiresAt ? k.expiresAt.toISOString().split("T")[0] : "Never",
+  }));
+
+  const owner = {
+    id: user.id,
+    name: user.name ?? "Owner",
+    email: user.email ?? "",
+    image: user.image,
+    role: "Owner" as const,
+    status: "active" as const,
+    isCurrent: true,
+  };
+
+  const members = [
+    owner,
+    ...user.teamMembers.map((m) => ({
+      id: m.id,
+      name: m.name || m.email.split("@")[0],
+      email: m.email,
+      image: null,
+      role: m.role as "Admin" | "Developer" | "Viewer",
+      status: m.status as "active" | "invited",
+    })),
+  ];
 
   return (
     <SettingClient
@@ -66,6 +107,8 @@ export default async function SettingsPage() {
         docs: docCount,
       }}
       settings={userSettings}
+      initialApiKeys={apiKeys}
+      initialTeamMembers={members}
     />
   );
 }

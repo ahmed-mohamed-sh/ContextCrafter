@@ -2,11 +2,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getUserOctokit } from "@/lib/github";
 import { NextResponse } from "next/server";
-import Groq from "groq-sdk";
-
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY!,
-});
+import { generateAICompletion } from "@/lib/ai";
 
 type Convention = {
   type: "naming" | "structure" | "pattern";
@@ -224,8 +220,8 @@ Repository evidence:
 ${evidenceText}
 `;
 
-    const completion = await groq.chat.completions.create({
-      model: "openai/gpt-oss-20b",
+    const completion = await generateAICompletion({
+      userId: session.user.id,
       messages: [
         {
           role: "system",
@@ -236,10 +232,10 @@ ${evidenceText}
           content: prompt,
         },
       ],
-      max_tokens: 1500,
+      maxTokens: 1500,
     });
 
-    const text = completion.choices[0]?.message?.content ?? "";
+    const text = completion.content || "";
 
     aiConventions = parseAIConventions(text);
   } catch (error) {

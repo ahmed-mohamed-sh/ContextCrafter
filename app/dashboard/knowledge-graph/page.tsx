@@ -1,11 +1,20 @@
-import KnowledgeGraphClient from "../repositories/[repoId]/knowledge-graph/KnowledgeGraphClient";
-import { Metadata } from "next";
+import { auth } from "@/lib/auth";
+import { redirect } from "next/navigation";
+import { db } from "@/lib/db";
 
-export const metadata: Metadata = {
-  title: "Knowledge Graph | ContextCrafter",
-  description: "Visualize relationships between components in your codebase",
-};
+export default async function KnowledgeGraphPage() {
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
 
-export default function KnowledgeGraphPage() {
-  return <KnowledgeGraphClient />;
+  const firstRepo = await db.repository.findFirst({
+    where: { userId: session.user.id },
+    select: { id: true },
+    orderBy: { updatedAt: "desc" },
+  });
+
+  if (firstRepo) {
+    redirect(`/dashboard/repositories/${firstRepo.id}/knowledge-graph`);
+  }
+
+  redirect("/dashboard");
 }

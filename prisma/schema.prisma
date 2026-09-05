@@ -23,7 +23,36 @@ model User {
   chatSessions   ChatSession[]
   repositories   Repository[]
   sessions       Session[]
+  apiKeys        ApiKey[]
+  teamMembers    TeamMember[]
   settings      UserSettings?
+}
+
+model ApiKey {
+  id         String    @id @default(cuid())
+  userId     String
+  name       String
+  key        String    @unique
+  status     String    @default("active") // "active" | "read-only"
+  expiresAt  DateTime?
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model TeamMember {
+  id          String   @id @default(cuid())
+  userId      String   // the owner who invited
+  email       String
+  name        String?
+  role        String   @default("Developer") // "Admin" | "Developer" | "Viewer"
+  status      String   @default("invited") // "active" | "invited"
+  inviteToken String?  @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Account {
@@ -70,6 +99,9 @@ model Repository {
   url             String
   private         Boolean       @default(false)
   language        String?
+  branch          String        @default("main")
+  autoSync        Boolean       @default(true)
+  excludedPaths   String[]      @default(["node_modules", ".next", "dist", "coverage", ".git"])
   stars           Int           @default(0)
   status          RepoStatus    @default(PENDING)
   analyzedAt      DateTime?
@@ -87,7 +119,7 @@ model Repository {
   decisions       Decision[]
   embeddings      Embedding[]
   files           RepoFile[]
-  conventions Convention[]
+  conventions     Convention[]
   user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
@@ -174,13 +206,35 @@ model Message {
 }
 
 model UserSettings {
-  id           String  @id @default(cuid())
-  userId       String  @unique
-  llmProvider  String  @default("groq")
-  llmApiKey    String?
-  embedModel   String  @default("nomic")
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  llmProvider       String   @default("groq")
+  llmApiKey         String?
+  embedModel        String   @default("nomic")
+  temperature       Float    @default(0.2)
+  maxTokens         Int      @default(4096)
+  customBaseUrl     String?
+  chunkSize         Int      @default(512)
+  chunkOverlap      Int      @default(64)
+  topK              Int      @default(8)
+  hybridWeight      Float    @default(0.7)
+  themeMode         String   @default("dark-obsidian")
+  syntaxTheme       String   @default("tokyo-night")
+  
+  // Notifications
+  notifyCodeReview  Boolean  @default(true)
+  notifySecurity    Boolean  @default(true)
+  notifySync        Boolean  @default(false)
+  notifyDebtSpike   Boolean  @default(true)
+  notifyWeekly      Boolean  @default(true)
+  alertEmail        String?
+  slackWebhookUrl   String?
+  discordWebhookUrl String?
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Integrations state
+  integrations      Json?
+
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Decision {

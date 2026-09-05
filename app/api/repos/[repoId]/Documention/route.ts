@@ -2,9 +2,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getUserOctokit } from "@/lib/github";
 import { NextResponse } from "next/server";
-import Groq from "groq-sdk";
-
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY! });
+import { generateAICompletion } from "@/lib/ai";
 
 export async function POST(
   req: Request,
@@ -88,13 +86,13 @@ ${fileContents.length > 0 ? `Files context:\n${fileContents.map((f) => `// ${f.p
 
 Generate the documentation now. Return only the documentation content, no extra explanation.`;
 
-  const completion = await groq.chat.completions.create({
-    model: "openai/gpt-oss-20b",
+  const completion = await generateAICompletion({
+    userId: session.user.id,
     messages: [{ role: "user", content: prompt }],
-    max_tokens: 2000,
+    maxTokens: 2000,
   });
 
-  const content = completion.choices[0]?.message?.content ?? "";
+  const content = completion.content || "";
 
   return NextResponse.json({ content });
 }
