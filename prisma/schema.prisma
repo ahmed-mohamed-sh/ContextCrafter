@@ -25,6 +25,7 @@ model User {
   sessions       Session[]
   apiKeys        ApiKey[]
   teamMembers    TeamMember[]
+  invoices       Invoice[]
   settings      UserSettings?
 }
 
@@ -232,9 +233,31 @@ model UserSettings {
   discordWebhookUrl String?
 
   // Integrations state
-  integrations      Json?
+  integrations          Json?
+
+  // Billing & Subscription
+  subscriptionPlan      String    @default("Hobby") // "Hobby" | "Pro" | "Team"
+  stripeCustomerId      String?
+  stripeSubscriptionId  String?
+  subscriptionStatus    String    @default("active")
+  subscriptionPeriodEnd DateTime?
 
   user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+
+model Invoice {
+  id            String   @id @default(cuid())
+  userId        String
+  invoiceNumber String   @unique
+  amount        Float
+  currency      String   @default("USD")
+  plan          String
+  status        String   @default("Paid") // "Paid" | "Pending" | "Refunded"
+  paymentMethod String   @default("card") // "card" | "stripe" | "paypal"
+  createdAt     DateTime @default(now())
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Decision {

@@ -107,7 +107,13 @@ export default function SettingClient({
   const [profileName, setProfileName] = useState(user.name);
   const [profileBio, setProfileBio] = useState("Full-stack engineer building AI-driven developer tooling.");
   const [profileRole, setProfileRole] = useState("Lead Developer");
-  const [themeMode, setThemeMode] = useState(settings?.themeMode || "dark-obsidian");
+  const [themeMode, setThemeMode] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("cc_theme_mode");
+      if (saved) return saved;
+    }
+    return settings?.themeMode || "dark-obsidian";
+  });
   const [syntaxTheme, setSyntaxTheme] = useState(settings?.syntaxTheme || "tokyo-night");
   const [savingProfile, setSavingProfile] = useState(false);
 
@@ -604,20 +610,128 @@ export default function SettingClient({
 
   // --- Billing State ---
   const [billingPlan, setBillingPlan] = useState<"Hobby" | "Pro" | "Team">("Hobby");
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [billingStatus, setBillingStatus] = useState<string>("active");
+  const [stripeReady, setStripeReady] = useState(false);
+  const [billingInvoices, setBillingInvoices] = useState<any[]>([]);
+  const [billingQuotas, setBillingQuotas] = useState<any>({
+    repos: { used: usage.repos, max: 3, unit: "repos" },
+    messages: { used: usage.messages, max: 100, unit: "messages" },
+    reviews: { used: usage.reviews, max: 10, unit: "reviews" },
+    docs: { used: usage.docs, max: 5, unit: "docs" },
+  });
 
-  // Apply theme dynamically to root document
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [selectedUpgradePlan, setSelectedUpgradePlan] = useState<"Pro" | "Team">("Pro");
+  const [paymentMethodTab, setPaymentMethodTab] = useState<"card" | "stripe" | "paypal">("card");
+  const [processingPayment, setProcessingPayment] = useState(false);
+  const [cardNumber, setCardNumber] = useState("");
+  const [cardExpiry, setCardExpiry] = useState("");
+  const [cardCvc, setCardCvc] = useState("");
+  const [cardName, setCardName] = useState(user.name || "");
+
+  async function fetchBilling() {
+    try {
+      const res = await fetch("/api/billing");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.plan) setBillingPlan(data.plan);
+        if (data.status) setBillingStatus(data.status);
+        if (data.stripeReady !== undefined) setStripeReady(data.stripeReady);
+        if (data.quotas) setBillingQuotas(data.quotas);
+        if (data.invoices) setBillingInvoices(data.invoices);
+      }
+    } catch (e) {
+      console.error("Failed to load billing", e);
+    }
+  }
+
   useEffect(() => {
+    fetchBilling();
+  }, []);
+
+  async function handleExecuteCheckout() {
+    setProcessingPayment(true);
+    try {
+      if (paymentMethodTab === "stripe" && stripeReady) {
+        // Stripe Hosted Checkout
+        const res = await fetch("/api/billing/checkout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ plan: selectedUpgradePlan }),
+        });
+        const data = await res.json();
+        if (data.url) {
+          window.location.href = data.url;
+          return;
+        }
+      }
+
+      // Direct In-App Gateway
+      const cardClean = cardNumber.replace(/\s+/g, "");
+      const cardLast4 = cardClean.length >= 4 ? cardClean.slice(-4) : "4242";
+
+      const res = await fetch("/api/billing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plan: selectedUpgradePlan,
+          paymentMethod: paymentMethodTab === "paypal" ? "PayPal Express" : `Credit Card (•••• ${cardLast4})`,
+          cardLast4,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || "Payment failed");
+
+      showToast(`Payment approved! You are now on the ${selectedUpgradePlan} Plan.`);
+      setShowUpgradeModal(false);
+      await fetchBilling();
+    } catch (err: any) {
+      showToast(err?.message || "Payment authorization failed", "error");
+    } finally {
+      setProcessingPayment(false);
+    }
+  }
+
+  async function handleOpenPortal() {
+    try {
+      const res = await fetch("/api/billing/portal", { method: "POST" });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        showToast(data.error || "Could not open billing portal", "error");
+      }
+    } catch {
+      showToast("Failed to launch billing portal", "error");
+    }
+  }
+
+  // Apply theme dynamically to root document & persist across sessions
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("cc_theme_mode", themeMode);
+    }
     document.documentElement.setAttribute("data-theme", themeMode);
     if (themeMode === "cyber-blue") {
-      document.body.style.background = "#060e20";
+      document.documentElement.style.backgroundColor = "#040b17";
+      document.body.style.background = "#040b17";
     } else if (themeMode === "deep-violet") {
-      document.body.style.background = "#0d0718";
+      document.documentElement.style.backgroundColor = "#090314";
+      document.body.style.background = "#090314";
     } else {
+      document.documentElement.style.backgroundColor = "#0b1326";
       document.body.style.background = "#0b1326";
     }
     window.dispatchEvent(new Event("theme-change"));
-  }, [themeMode]);
+
+    // Sync to PostgreSQL in background
+    fetch("/api/setting/theme", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ themeMode, syntaxTheme }),
+    }).catch(() => {});
+  }, [themeMode, syntaxTheme]);
 
   return (
     <div className="flex-1 overflow-y-auto pt-8 pb-16 px-4 sm:px-6 md:px-12 max-w-7xl mx-auto w-full flex flex-col md:flex-row gap-8">
@@ -2813,21 +2927,32 @@ export default function SettingClient({
                     Subscription Plan & Workspace Quotas
                   </h3>
                   <p style={{ fontFamily: "Inter, sans-serif", fontSize: 13, color: "#918fa1", marginTop: 2 }}>
-                    Manage billing tiers, monthly compute units, and invoice receipts.
+                    Manage subscription tiers, payment methods, monthly compute units, and invoice receipts.
                   </p>
                 </div>
 
-                <button
-                  onClick={() => setShowUpgradeModal(true)}
-                  className="cursor-pointer px-5 py-2.5 rounded-xl flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all text-white text-sm font-semibold self-start sm:self-auto"
-                  style={{
-                    background: "linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)",
-                    boxShadow: "0 4px 14px rgba(79,70,229,0.4)",
-                  }}
-                >
-                  <span className="material-symbols-outlined text-[18px]">upgrade</span>
-                  Upgrade Plan
-                </button>
+                <div className="flex items-center gap-3 self-start sm:self-auto">
+                  {stripeReady && billingPlan !== "Hobby" && (
+                    <button
+                      onClick={handleOpenPortal}
+                      className="cursor-pointer px-4 py-2.5 rounded-xl border border-white/10 hover:bg-white/5 text-slate-300 text-xs font-semibold flex items-center gap-1.5 transition-all"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">manage_accounts</span>
+                      Stripe Portal
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setShowUpgradeModal(true)}
+                    className="cursor-pointer px-5 py-2.5 rounded-xl flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all text-white text-sm font-semibold shadow-lg"
+                    style={{
+                      background: "linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)",
+                      boxShadow: "0 4px 14px rgba(79,70,229,0.4)",
+                    }}
+                  >
+                    <span className="material-symbols-outlined text-[18px]">credit_card</span>
+                    {billingPlan === "Hobby" ? "Upgrade Plan" : "Change Subscription"}
+                  </button>
+                </div>
               </div>
 
               {/* Current Plan Overview */}
@@ -2840,22 +2965,29 @@ export default function SettingClient({
               >
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
-                    <span className="text-xs font-semibold uppercase tracking-wider text-indigo-300">
-                      Active Subscription
-                    </span>
-                    <h4 style={{ fontFamily: "Geist, sans-serif", fontSize: 26, fontWeight: 700, color: "#ffffff", marginTop: 2 }}>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold uppercase tracking-wider text-indigo-300">
+                        Active Subscription
+                      </span>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-green-500/20 text-green-300 border border-green-500/30">
+                        {billingStatus.toUpperCase()}
+                      </span>
+                    </div>
+                    <h4 style={{ fontFamily: "Geist, sans-serif", fontSize: 26, fontWeight: 700, color: "#ffffff", marginTop: 4 }}>
                       {billingPlan} Plan
                     </h4>
                     <p style={{ fontFamily: "Inter, sans-serif", fontSize: 13, color: "#918fa1", marginTop: 2 }}>
                       {billingPlan === "Hobby"
-                        ? "Free forever plan with up to 3 connected repositories & 100 monthly chats."
-                        : "Unlimited repositories, infinite vector context, and priority AST indexing."}
+                        ? "Free starter tier with 3 connected repositories & 100 monthly chats."
+                        : billingPlan === "Pro"
+                        ? "Unlimited repositories, infinite vector context, and priority AST indexing."
+                        : "Full team workspace with 15 seats, Jira auto-ticketing, and SOC-2 standard review."}
                     </p>
                   </div>
 
                   <div className="text-left sm:text-right">
                     <span style={{ fontFamily: "Geist, sans-serif", fontSize: 28, fontWeight: 700, color: "#4cd7f6" }}>
-                      {billingPlan === "Hobby" ? "$0" : "$29"}
+                      {billingPlan === "Hobby" ? "$0" : billingPlan === "Pro" ? "$29" : "$79"}
                     </span>
                     <span style={{ fontFamily: "Inter, sans-serif", fontSize: 12, color: "#918fa1" }}>/month</span>
                   </div>
@@ -2869,10 +3001,10 @@ export default function SettingClient({
                 </h4>
 
                 {[
-                  { label: "Active Connected Repositories", used: usage.repos, max: 3, unit: "repos", color: "#4cd7f6" },
-                  { label: "AI Reasoning & Chat Queries", used: usage.messages, max: 100, unit: "messages", color: "#c3c0ff" },
-                  { label: "Automated Code Reviews", used: usage.reviews, max: 10, unit: "reviews", color: "#ddb7ff" },
-                  { label: "Architecture Docs Generated", used: usage.docs, max: 5, unit: "docs", color: "#93e8ff" },
+                  { label: "Active Connected Repositories", used: billingQuotas?.repos?.used ?? 1, max: billingQuotas?.repos?.max ?? 3, unit: "repos", color: "#4cd7f6" },
+                  { label: "AI Reasoning & Chat Queries", used: billingQuotas?.messages?.used ?? 4, max: billingQuotas?.messages?.max ?? 100, unit: "messages", color: "#c3c0ff" },
+                  { label: "Automated Code Reviews", used: billingQuotas?.reviews?.used ?? 3, max: billingQuotas?.reviews?.max ?? 10, unit: "reviews", color: "#ddb7ff" },
+                  { label: "Architecture Docs Generated", used: billingQuotas?.docs?.used ?? 1, max: billingQuotas?.docs?.max ?? 5, unit: "docs", color: "#93e8ff" },
                 ].map((meter) => {
                   const pct = Math.min(100, (meter.used / meter.max) * 100);
                   return (
@@ -2898,38 +3030,42 @@ export default function SettingClient({
 
               {/* Invoices Table */}
               <div className="mt-8 pt-6 border-t border-white/5 space-y-4">
-                <h4 style={{ fontFamily: "Geist, sans-serif", fontSize: 16, fontWeight: 600, color: "#dae2fd" }}>
-                  Billing History & Invoices
-                </h4>
+                <div className="flex items-center justify-between">
+                  <h4 style={{ fontFamily: "Geist, sans-serif", fontSize: 16, fontWeight: 600, color: "#dae2fd" }}>
+                    Billing History & Invoices
+                  </h4>
+                  <span className="text-xs text-slate-400">Stored in PostgreSQL</span>
+                </div>
 
-                <div className="rounded-xl overflow-hidden border border-white/5 bg-black/20">
-                  {[
-                    { id: "INV-2026-08", date: "Aug 01, 2026", amount: "$0.00", status: "Paid" },
-                    { id: "INV-2026-07", date: "Jul 01, 2026", amount: "$0.00", status: "Paid" },
-                  ].map((inv) => (
+                <div className="rounded-xl overflow-hidden border border-white/5 bg-black/20 divide-y divide-white/5">
+                  {billingInvoices.map((inv) => (
                     <div
                       key={inv.id}
-                      className="p-4 flex items-center justify-between border-b border-white/5 last:border-0 text-xs"
+                      className="p-4 flex items-center justify-between text-xs hover:bg-white/[0.02] transition-colors"
                     >
                       <div className="flex items-center gap-3">
-                        <span className="material-symbols-outlined text-[18px] text-slate-400">receipt</span>
+                        <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+                          <span className="material-symbols-outlined text-[18px]">receipt_long</span>
+                        </div>
                         <div>
                           <p className="font-mono font-semibold text-slate-200">{inv.id}</p>
-                          <p className="text-slate-400">{inv.date}</p>
+                          <p className="text-slate-400 text-[11px]">{inv.date} • {inv.paymentMethod || "Card"}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-4">
-                        <span className="font-mono text-slate-200">{inv.amount}</span>
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-green-500/20 text-green-300">
+                        <span className="font-mono font-semibold text-slate-200">{inv.amount}</span>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-green-500/20 text-green-300 border border-green-500/30">
                           {inv.status}
                         </span>
-                        <button
-                          onClick={() => showToast("Invoice receipt downloaded!")}
-                          className="cursor-pointer text-slate-400 hover:text-white"
-                          title="Download Receipt"
+                        <a
+                          href={`/api/billing/invoice/${inv.id}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="cursor-pointer p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-all flex items-center gap-1"
+                          title="View & Download PDF Receipt"
                         >
                           <span className="material-symbols-outlined text-[16px]">download</span>
-                        </button>
+                        </a>
                       </div>
                     </div>
                   ))}
@@ -2937,105 +3073,218 @@ export default function SettingClient({
               </div>
             </section>
 
-            {/* Upgrade Modal */}
+            {/* Payment Gateway Checkout Modal */}
             {showUpgradeModal && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200">
                 <div
-                  className="w-full max-w-2xl rounded-2xl p-6 sm:p-8 space-y-6 border border-white/10"
-                  style={{ background: "#131b2e", boxShadow: "0 25px 50px -12px rgba(0,0,0,0.8)" }}
+                  className="w-full max-w-2xl rounded-2xl p-6 sm:p-8 space-y-6 border border-white/10 max-h-[90vh] overflow-y-auto"
+                  style={{ background: "#131b2e", boxShadow: "0 25px 60px -15px rgba(0,0,0,0.9)" }}
                 >
+                  {/* Modal Header */}
                   <div className="flex items-center justify-between pb-3 border-b border-white/10">
-                    <div>
-                      <h3 style={{ fontFamily: "Geist, sans-serif", fontSize: 20, fontWeight: 700, color: "#dae2fd" }}>
-                        Select Your Workspace Tier
-                      </h3>
-                      <p className="text-xs text-slate-400 mt-1">Upgrade anytime with prorated billing.</p>
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-300">
+                        <span className="material-symbols-outlined text-[20px]">payments</span>
+                      </div>
+                      <div>
+                        <h3 style={{ fontFamily: "Geist, sans-serif", fontSize: 20, fontWeight: 700, color: "#dae2fd" }}>
+                          Checkout Payment Gateway
+                        </h3>
+                        <p className="text-xs text-slate-400">Upgrade your workspace tier with instant activation</p>
+                      </div>
                     </div>
                     <button
                       onClick={() => setShowUpgradeModal(false)}
-                      className="cursor-pointer p-1 text-slate-400 hover:text-white"
+                      className="cursor-pointer p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/5"
                     >
                       <span className="material-symbols-outlined text-[20px]">close</span>
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Plan Picker */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {[
                       {
+                        id: "Pro",
                         name: "Pro Developer",
                         price: "$29",
-                        desc: "For individual developers & consultants building serious systems.",
-                        features: [
-                          "Unlimited Repositories",
-                          "Infinite AST Vector Context",
-                          "Full Knowledge Graph 3D",
-                          "Priority Inference Queue",
-                          "VS Code Extension Pro",
-                        ],
+                        desc: "Unlimited Repositories & Vector Search",
                         color: "#c3c0ff",
-                        tag: "MOST POPULAR",
                       },
                       {
-                        name: "Team & Enterprise",
+                        id: "Team",
+                        name: "Team & Scale",
                         price: "$79",
-                        desc: "For engineering teams needing shared standards & SOC-2 compliance.",
-                        features: [
-                          "Up to 15 Team Members",
-                          "Custom LLM & On-Prem Ollama",
-                          "Automated PR Review Gatekeeper",
-                          "Jira / Linear Issue Sync",
-                          "Dedicated Support Engineer",
-                        ],
+                        desc: "15 Team Seats & Automated PR Reviews",
                         color: "#4cd7f6",
-                        tag: "TEAM SCALE",
                       },
                     ].map((plan) => (
                       <div
-                        key={plan.name}
-                        className="p-5 rounded-2xl border border-white/10 bg-black/30 flex flex-col justify-between space-y-4"
+                        key={plan.id}
+                        onClick={() => setSelectedUpgradePlan(plan.id as any)}
+                        className={`p-4 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
+                          selectedUpgradePlan === plan.id
+                            ? "border-indigo-500 bg-indigo-950/40 ring-1 ring-indigo-500 shadow-lg"
+                            : "border-white/10 bg-black/20 hover:border-white/20"
+                        }`}
                       >
-                        <div>
-                          <span
-                            className="px-2 py-0.5 rounded text-[10px] font-bold"
-                            style={{ background: `${plan.color}20`, color: plan.color }}
-                          >
-                            {plan.tag}
-                          </span>
-                          <h4 style={{ fontFamily: "Geist, sans-serif", fontSize: 18, fontWeight: 700, color: "#ffffff", marginTop: 8 }}>
-                            {plan.name}
-                          </h4>
-                          <div className="flex items-baseline gap-1 my-2">
-                            <span style={{ fontFamily: "Geist, sans-serif", fontSize: 28, fontWeight: 700, color: plan.color }}>
-                              {plan.price}
-                            </span>
-                            <span className="text-xs text-slate-400">/mo</span>
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-semibold text-sm text-white">{plan.name}</p>
+                            <p className="text-[11px] text-slate-400 mt-0.5">{plan.desc}</p>
                           </div>
-                          <p className="text-xs text-slate-400 mb-4">{plan.desc}</p>
-                          <ul className="space-y-2 text-xs text-slate-300">
-                            {plan.features.map((f) => (
-                              <li key={f} className="flex items-center gap-2">
-                                <span className="material-symbols-outlined text-[14px]" style={{ color: plan.color }}>
-                                  check_circle
-                                </span>
-                                {f}
-                              </li>
-                            ))}
-                          </ul>
+                          <span className="font-mono font-bold text-sm" style={{ color: plan.color }}>
+                            {plan.price}<span className="text-[10px] text-slate-400">/mo</span>
+                          </span>
                         </div>
-
-                        <button
-                          onClick={() => {
-                            setBillingPlan("Pro");
-                            setShowUpgradeModal(false);
-                            showToast(`Successfully switched to ${plan.name}!`);
-                          }}
-                          className="cursor-pointer w-full py-2.5 rounded-xl text-xs font-semibold text-white transition-all hover:brightness-110"
-                          style={{ background: "linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)" }}
-                        >
-                          Switch to {plan.name}
-                        </button>
                       </div>
                     ))}
+                  </div>
+
+                  {/* Payment Method Selector */}
+                  <div className="space-y-4">
+                    <div className="flex rounded-xl p-1 bg-black/40 border border-white/10">
+                      {[
+                        { id: "card", label: "Credit / Debit Card", icon: "credit_card" },
+                        { id: "stripe", label: "Stripe Checkout", icon: "bolt" },
+                        { id: "paypal", label: "PayPal", icon: "account_balance_wallet" },
+                      ].map((tab) => (
+                        <button
+                          key={tab.id}
+                          onClick={() => setPaymentMethodTab(tab.id as any)}
+                          className={`flex-1 py-2 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                            paymentMethodTab === tab.id
+                              ? "bg-indigo-600 text-white shadow-md"
+                              : "text-slate-400 hover:text-white"
+                          }`}
+                        >
+                          <span className="material-symbols-outlined text-[16px]">{tab.icon}</span>
+                          {tab.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Credit Card Form */}
+                    {paymentMethodTab === "card" && (
+                      <div className="space-y-3 p-4 rounded-xl bg-black/30 border border-white/5 animate-in fade-in">
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-400 mb-1">Cardholder Name</label>
+                          <input
+                            type="text"
+                            placeholder="Ahmed Mohamed"
+                            value={cardName}
+                            onChange={(e) => setCardName(e.target.value)}
+                            className="w-full rounded-xl px-3.5 py-2 text-xs focus:outline-none"
+                            style={{ background: "rgba(0,0,0,0.3)", border: "1px solid rgba(255,255,255,0.1)", color: "#dae2fd" }}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-400 mb-1">Card Number</label>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              maxLength={19}
+                              placeholder="4242 •••• •••• 4242"
+                              value={cardNumber}
+                              onChange={(e) => {
+                                const val = e.target.value.replace(/\D/g, "").replace(/(.{4})/g, "$1 ").trim();
+                                setCardNumber(val);
+                              }}
+                              className="w-full rounded-xl pl-3.5 pr-10 py-2 text-xs font-mono focus:outline-none"
+                              style={{ background: "rgba(0,0,0,0.3)", border: "1px solid rgba(255,255,255,0.1)", color: "#dae2fd" }}
+                            />
+                            <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">
+                              credit_card
+                            </span>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[11px] font-semibold text-slate-400 mb-1">Expires (MM/YY)</label>
+                            <input
+                              type="text"
+                              maxLength={5}
+                              placeholder="12/28"
+                              value={cardExpiry}
+                              onChange={(e) => setCardExpiry(e.target.value)}
+                              className="w-full rounded-xl px-3.5 py-2 text-xs font-mono focus:outline-none"
+                              style={{ background: "rgba(0,0,0,0.3)", border: "1px solid rgba(255,255,255,0.1)", color: "#dae2fd" }}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-semibold text-slate-400 mb-1">CVC Security Code</label>
+                            <input
+                              type="password"
+                              maxLength={4}
+                              placeholder="•••"
+                              value={cardCvc}
+                              onChange={(e) => setCardCvc(e.target.value)}
+                              className="w-full rounded-xl px-3.5 py-2 text-xs font-mono focus:outline-none"
+                              style={{ background: "rgba(0,0,0,0.3)", border: "1px solid rgba(255,255,255,0.1)", color: "#dae2fd" }}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 pt-2 text-[11px] text-slate-400">
+                          <span className="material-symbols-outlined text-[15px] text-green-400">lock</span>
+                          <span>256-Bit SSL Encrypted Payment Gateway</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {paymentMethodTab === "stripe" && (
+                      <div className="p-4 rounded-xl bg-indigo-950/20 border border-indigo-500/20 space-y-2 text-xs text-slate-300">
+                        <p className="font-semibold text-white flex items-center gap-1.5">
+                          <span className="material-symbols-outlined text-indigo-400 text-[16px]">bolt</span>
+                          Stripe Hosted Checkout
+                        </p>
+                        <p className="text-[11px] text-slate-400 leading-relaxed">
+                          You will be redirected securely to Stripe to complete subscription checkout with Apple Pay, Google Pay, or Credit Card.
+                        </p>
+                      </div>
+                    )}
+
+                    {paymentMethodTab === "paypal" && (
+                      <div className="p-4 rounded-xl bg-blue-950/20 border border-blue-500/20 space-y-2 text-xs text-slate-300">
+                        <p className="font-semibold text-white flex items-center gap-1.5">
+                          <span className="material-symbols-outlined text-cyan-400 text-[16px]">account_balance_wallet</span>
+                          PayPal Subscription
+                        </p>
+                        <p className="text-[11px] text-slate-400 leading-relaxed">
+                          Authorize recurring monthly subscription payment via your PayPal account.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Order Summary & Submit */}
+                  <div className="pt-3 border-t border-white/10 space-y-3">
+                    <div className="flex justify-between items-center text-sm font-semibold">
+                      <span className="text-slate-300">Total Due Today:</span>
+                      <span className="font-mono text-cyan-400 text-lg">
+                        {selectedUpgradePlan === "Pro" ? "$29.00 USD" : "$79.00 USD"}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-end gap-3 pt-2">
+                      <button
+                        onClick={() => setShowUpgradeModal(false)}
+                        className="cursor-pointer px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-300 hover:bg-white/5"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleExecuteCheckout}
+                        disabled={processingPayment}
+                        className="cursor-pointer px-6 py-2.5 rounded-xl text-xs font-bold text-white shadow-xl flex items-center gap-2 hover:brightness-110 active:scale-95 transition-all disabled:opacity-50"
+                        style={{ background: "linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)" }}
+                      >
+                        {processingPayment && (
+                          <span className="material-symbols-outlined text-[16px] animate-spin">sync</span>
+                        )}
+                        {processingPayment ? "Processing..." : `Pay & Activate ${selectedUpgradePlan} Plan`}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -3046,3 +3295,4 @@ export default function SettingClient({
     </div>
   );
 }
+

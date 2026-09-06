@@ -265,37 +265,85 @@
 
 /* Theme Switching Overrides */
 [data-theme="cyber-blue"] {
-  --color-background: #060e20 !important;
-  --color-primary: #4cd7f6 !important;
-  --color-primary-container: #006a7c !important;
-  --color-on-primary-container: #acedff !important;
-  --color-tertiary: #4cd7f6 !important;
-  --color-surface: #0b1528 !important;
-  --color-surface-container-low: #0d1a33 !important;
-  --color-surface-container: #102142 !important;
-  --color-surface-container-high: #152952 !important;
+  --background: #040b17 !important;
+  --color-background: #040b17 !important;
+  --foreground: #e0f2fe !important;
+  --color-foreground: #e0f2fe !important;
+  --color-on-background: #e0f2fe !important;
+  --color-on-surface: #e0f2fe !important;
+  --primary: #38bdf8 !important;
+  --color-primary: #38bdf8 !important;
+  --color-primary-container: #0284c7 !important;
+  --color-on-primary-container: #e0f2fe !important;
+  --secondary: #06b6d4 !important;
+  --color-secondary: #06b6d4 !important;
+  --color-secondary-container: #0891b2 !important;
+  --color-tertiary: #22d3ee !important;
+  --color-surface: #071324 !important;
+  --color-surface-container-lowest: #020617 !important;
+  --color-surface-container-low: #0b1c34 !important;
+  --color-surface-container: #0f2647 !important;
+  --color-surface-container-high: #163560 !important;
+  --color-surface-container-highest: #1e447a !important;
+  --color-surface-variant: #1a3b6b !important;
+  --card: #0b1c34 !important;
+  --card-foreground: #e0f2fe !important;
+  --border: rgba(56, 189, 248, 0.15) !important;
+  --color-outline: #38bdf8 !important;
 }
 
 [data-theme="deep-violet"] {
-  --color-background: #0d0718 !important;
-  --color-primary: #ddb7ff !important;
-  --color-primary-container: #5b21b6 !important;
+  --background: #090314 !important;
+  --color-background: #090314 !important;
+  --foreground: #f5f3ff !important;
+  --color-foreground: #f5f3ff !important;
+  --color-on-background: #f5f3ff !important;
+  --color-on-surface: #f5f3ff !important;
+  --primary: #c084fc !important;
+  --color-primary: #c084fc !important;
+  --color-primary-container: #7e22ce !important;
   --color-on-primary-container: #f3e8ff !important;
-  --color-tertiary: #c084fc !important;
-  --color-surface: #140b24 !important;
-  --color-surface-container-low: #1b1030 !important;
-  --color-surface-container: #23163d !important;
-  --color-surface-container-high: #2d1d4d !important;
+  --secondary: #e879f9 !important;
+  --color-secondary: #e879f9 !important;
+  --color-secondary-container: #a21caf !important;
+  --color-tertiary: #f472b6 !important;
+  --color-surface: #110624 !important;
+  --color-surface-container-lowest: #06010d !important;
+  --color-surface-container-low: #190a33 !important;
+  --color-surface-container: #220e45 !important;
+  --color-surface-container-high: #2f145f !important;
+  --color-surface-container-highest: #3e1b7d !important;
+  --color-surface-variant: #36176d !important;
+  --card: #190a33 !important;
+  --card-foreground: #f5f3ff !important;
+  --border: rgba(192, 132, 252, 0.15) !important;
+  --color-outline: #c084fc !important;
 }
 
 [data-theme="dark-obsidian"] {
+  --background: #0b1326 !important;
   --color-background: #0b1326 !important;
+  --foreground: #dae2fd !important;
+  --color-foreground: #dae2fd !important;
+  --color-on-background: #dae2fd !important;
+  --color-on-surface: #dae2fd !important;
+  --primary: #c3c0ff !important;
   --color-primary: #c3c0ff !important;
   --color-primary-container: #4f46e5 !important;
   --color-on-primary-container: #dad7ff !important;
+  --secondary: #ddb7ff !important;
+  --color-secondary: #ddb7ff !important;
+  --color-secondary-container: #6f00be !important;
   --color-tertiary: #4cd7f6 !important;
   --color-surface: #0b1326 !important;
+  --color-surface-container-lowest: #060e20 !important;
   --color-surface-container-low: #131b2e !important;
   --color-surface-container: #171f33 !important;
   --color-surface-container-high: #222a3d !important;
+  --color-surface-container-highest: #2d3449 !important;
+  --color-surface-variant: #2d3449 !important;
+  --card: #131b2e !important;
+  --card-foreground: #dae2fd !important;
+  --border: rgba(195, 192, 255, 0.15) !important;
+  --color-outline: #918fa1 !important;
 }

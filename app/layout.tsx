@@ -9,8 +9,27 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var saved = localStorage.getItem('cc_theme_mode') || 'dark-obsidian';
+                  document.documentElement.setAttribute('data-theme', saved);
+                  if (saved === 'cyber-blue') {
+                    document.documentElement.style.backgroundColor = '#040b17';
+                  } else if (saved === 'deep-violet') {
+                    document.documentElement.style.backgroundColor = '#090314';
+                  } else {
+                    document.documentElement.style.backgroundColor = '#0b1326';
+                  }
+                } catch(e) {}
+              })();
+            `,
+          }}
+        />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
           rel="preconnect"
@@ -26,7 +45,9 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body style={{ background: "#0b1326", margin: 0 }}>{children}</body>
+      <body className="bg-background text-on-background min-h-screen antialiased selection:bg-primary/20 selection:text-primary">
+        {children}
+      </body>
     </html>
   );
 }
